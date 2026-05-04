@@ -4,8 +4,6 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import {
   Play,
   Pause,
-  Volume2,
-  VolumeX,
   Radio,
   Sun,
   Moon,
@@ -209,8 +207,6 @@ export function RadioPlayer() {
   
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [volume, setVolume] = useState(0.8)
-  const [isMuted, setIsMuted] = useState(false)
   const [metadata, setMetadata] = useState<StreamMetadata | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [lastTrack, setLastTrack] = useState<string>("")
@@ -378,6 +374,7 @@ export function RadioPlayer() {
         }
         
         audioRef.current.src = STREAM_URL
+        audioRef.current.volume = 1
         await audioRef.current.play()
         setIsPlaying(true)
       } catch (error) {
@@ -385,22 +382,6 @@ export function RadioPlayer() {
       } finally {
         setIsLoading(false)
       }
-    }
-  }
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(e.target.value)
-    setVolume(newVolume)
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume
-    }
-    if (newVolume > 0) setIsMuted(false)
-  }
-
-  const toggleMute = () => {
-    if (audioRef.current) {
-      audioRef.current.muted = !isMuted
-      setIsMuted(!isMuted)
     }
   }
 
@@ -771,45 +752,6 @@ export function RadioPlayer() {
               )}
             </AnimatePresence>
           </motion.button>
-        </motion.div>
-
-        {/* Volume Control */}
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.4 }}
-          className="mb-8 flex w-full max-w-[300px] items-center gap-4"
-          role="group"
-          aria-label="Volume controls"
-        >
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={toggleMute}
-            className="p-2 text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:rounded-full active:scale-90 touch-manipulation"
-            aria-label={isMuted ? "Unmute audio" : "Mute audio"}
-            aria-pressed={isMuted}
-          >
-            {isMuted || volume === 0 ? (
-              <VolumeX className="h-6 w-6" aria-hidden="true" />
-            ) : (
-              <Volume2 className="h-6 w-6" aria-hidden="true" />
-            )}
-          </motion.button>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={isMuted ? 0 : volume}
-            onChange={handleVolumeChange}
-            className="h-3 flex-1 cursor-pointer appearance-none rounded-full bg-secondary touch-manipulation [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:active:scale-110 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
-            aria-label="Volume level"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round((isMuted ? 0 : volume) * 100)}
-            aria-valuetext={`Volume ${Math.round((isMuted ? 0 : volume) * 100)} percent`}
-          />
         </motion.div>
 
         {/* Current Program Card */}
