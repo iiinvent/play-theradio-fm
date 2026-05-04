@@ -66,7 +66,7 @@ async function fetchPlayerInfo(): Promise<PlayerInfo | null> {
   return null
 }
 
-async function fetchStreamStatus(): Promise<StreamStatus | null> {
+async function fetchRealtimeStreamStatus(): Promise<StreamStatus | null> {
   try {
     const response = await fetch(STATUS_URL, {
       headers: { "User-Agent": "Mozilla/5.0" },
@@ -83,12 +83,12 @@ async function fetchStreamStatus(): Promise<StreamStatus | null> {
   return null
 }
 
-async function fetchSongCover(trackName: string): Promise<string | null> {
-  if (!trackName) return null
+async function fetchRealtimeSongCover(currentTrack: string): Promise<string | null> {
+  if (!currentTrack) return null
   
   try {
     const today = new Date().toISOString().split("T")[0]
-    const url = `${SONG_COVER_URL}?q=${encodeURIComponent(trackName)}&base-date=${today}&hash=d58c50320d789f14c139cae9bfadc9a430a9f6fa`
+    const url = `${SONG_COVER_URL}?q=${encodeURIComponent(currentTrack)}&base-date=${today}&hash=d58c50320d789f14c139cae9bfadc9a430a9f6fa`
     
     const response = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
@@ -138,13 +138,13 @@ export async function GET() {
     // Fetch player info and stream status in parallel
     const [playerInfo, streamStatus] = await Promise.all([
       fetchPlayerInfo(),
-      fetchStreamStatus(),
+      fetchRealtimeStreamStatus(),
     ])
 
     const currentTrack = streamStatus?.currentTrack || ""
     
     // Fetch song cover if we have a track name
-    const songCover = await fetchSongCover(currentTrack)
+    const songCover = await fetchRealtimeSongCover(currentTrack)
     
     // Get current program from schedule
     const currentProgram = getCurrentProgram(playerInfo?.nextSchedules)

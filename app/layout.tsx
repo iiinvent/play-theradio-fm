@@ -20,6 +20,38 @@ interface SongCover {
   cover?: string
 }
 
+async function fetchRealtimeCurrentTrack(): Promise<string> {
+  const statusResponse = await fetch(STATUS_URL, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(3000),
+  })
+
+  if (!statusResponse.ok) return ''
+
+  const status: StreamStatus = await statusResponse.json()
+  return status.currentTrack || ''
+}
+
+async function fetchRealtimeSongCover(currentTrack: string): Promise<string | null> {
+  if (!currentTrack) return null
+
+  const today = new Date().toISOString().split('T')[0]
+  const coverResponse = await fetch(
+    `${SONG_COVER_URL}?q=${encodeURIComponent(currentTrack)}&base-date=${today}&hash=d58c50320d789f14c139cae9bfadc9a430a9f6fa`,
+    {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3000),
+    }
+  )
+
+  if (!coverResponse.ok) return null
+
+  const cover: SongCover = await coverResponse.json()
+  return cover.success && cover.cover ? `${COVER_BASE_URL}${cover.cover}` : null
+}
+
 const geistSans = Geist({ 
   subsets: ["latin"],
   variable: "--font-geist-sans"
@@ -34,43 +66,9 @@ export const revalidate = 0
 
 async function getNowPlaying(): Promise<{ currentTrack: string; albumArt: string | null }> {
   try {
-    const statusResponse = await fetch(STATUS_URL, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(3000),
-    })
-
-    if (!statusResponse.ok) {
-      return { currentTrack: '', albumArt: null }
-    }
-
-    const status: StreamStatus = await statusResponse.json()
-    const currentTrack = status.currentTrack || ''
-
-    if (!currentTrack) {
-      return { currentTrack, albumArt: null }
-    }
-
-    const today = new Date().toISOString().split('T')[0]
-    const coverResponse = await fetch(
-      `${SONG_COVER_URL}?q=${encodeURIComponent(currentTrack)}&base-date=${today}&hash=d58c50320d789f14c139cae9bfadc9a430a9f6fa`,
-      {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        cache: 'no-store',
-        signal: AbortSignal.timeout(3000),
-      }
-    )
-
-    if (!coverResponse.ok) {
-      return { currentTrack, albumArt: null }
-    }
-
-    const cover: SongCover = await coverResponse.json()
-
-    return {
-      currentTrack,
-      albumArt: cover.success && cover.cover ? `${COVER_BASE_URL}${cover.cover}` : null,
-    }
+    const currentTrack = await fetchRealtimeCurrentTrack()
+    const albumArt = await fetchRealtimeSongCover(currentTrack)
+    return { currentTrack, albumArt }
   } catch {
     return { currentTrack: '', albumArt: null }
   }
