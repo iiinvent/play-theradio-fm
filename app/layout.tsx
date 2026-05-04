@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'theradio.fm - Live Internet Radio',
     description: 'Listen live to theradio.fm with real-time track info and album artwork',
+    url: 'https://play.theradio.fm',
     siteName: 'theradio.fm',
     type: 'music.radio_station',
     images: [

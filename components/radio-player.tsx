@@ -447,7 +447,8 @@ export function RadioPlayer() {
   const handleShare = async () => {
     const shareTitle = `${trackInfo.title} - ${trackInfo.artist}`
     const shareText = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm`
-    const shareUrl = typeof window !== "undefined" ? window.location.href : "https://theradio.fm"
+    // Share the play.theradio.fm URL but mention theradio.fm in text
+    const shareUrl = "https://play.theradio.fm"
 
     // Try native Web Share API first (mobile)
     if (typeof navigator !== "undefined" && navigator.share) {
