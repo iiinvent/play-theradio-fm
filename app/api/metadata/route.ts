@@ -8,6 +8,9 @@ const STATUS_URL = "https://d36nr0u3xmc4mm.cloudfront.net/index.php/api/streamin
 const SONG_COVER_URL = "https://brlogic-api.minhawebradio.net/api/streaming/song-cover"
 const COVER_BASE_URL = "https://public-rf-song-cover.minhawebradio.net/"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 interface PlayerInfo {
   radioName?: string
   customerUrl?: string
@@ -90,6 +93,7 @@ async function fetchSongCover(trackName: string): Promise<string | null> {
     const response = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
       signal: AbortSignal.timeout(5000),
+      cache: "no-store",
     })
     
     if (response.ok) {
@@ -154,6 +158,7 @@ export async function GET() {
           "User-Agent": "Mozilla/5.0",
         },
         signal: AbortSignal.timeout(3000),
+        cache: "no-store",
       })
       
       streamResponse.headers.forEach((value, key) => {
@@ -193,9 +198,15 @@ export async function GET() {
       } : null,
       
       // Station branding
-      stationLogo: playerInfo?.customerLogo 
-        ? `${playerInfo?.assetUrls?.upload || ""}${playerInfo.customerLogo}` 
+      stationLogo: playerInfo?.customerLogo
+        ? `${playerInfo?.assetUrls?.upload || ""}${playerInfo.customerLogo}`
         : null,
+    }, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      },
     })
   } catch (error) {
     console.error("Error fetching metadata:", error)
@@ -211,7 +222,14 @@ export async function GET() {
         albumArt: null,
         isLive: false,
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        },
+      }
     )
   }
 }

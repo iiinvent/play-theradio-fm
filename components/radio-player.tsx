@@ -51,6 +51,7 @@ type LavaIntensity = "off" | "subtle" | "medium" | "high" | "reactive"
 
 const STREAM_URL = "https://servidor36-2.brlogic.com:7064/live"
 const STATION_LOGO_URL = "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/theradio-fm-logo-riP2RHcCrwTnJDqhSbaT3uXluubSLi.jpg"
+const DEFAULT_SHARE_IMAGE_URL = "/apple-icon.jpg"
 const SHARE_URL = "https://theradio.fm"
 
 const SLEEP_TIMER_OPTIONS = [
@@ -346,6 +347,7 @@ export function RadioPlayer() {
     // Build an absolute URL for artwork (Media Session requires absolute URLs in some browsers)
     const origin = typeof window !== "undefined" ? window.location.origin : ""
     const absoluteArtSrc = artSrc?.startsWith("/") ? `${origin}${artSrc}` : artSrc
+    const defaultShareImageSrc = `${origin}${DEFAULT_SHARE_IMAGE_URL}`
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
@@ -358,8 +360,8 @@ export function RadioPlayer() {
             { src: absoluteArtSrc, sizes: "128x128", type: "image/jpeg" },
           ]
         : [
-            { src: STATION_LOGO_URL, sizes: "512x512", type: "image/jpeg" },
-            { src: STATION_LOGO_URL, sizes: "256x256", type: "image/jpeg" },
+            { src: defaultShareImageSrc, sizes: "512x512", type: "image/jpeg" },
+            { src: defaultShareImageSrc, sizes: "256x256", type: "image/jpeg" },
           ],
     })
 
@@ -394,7 +396,7 @@ export function RadioPlayer() {
   // Fetch stream metadata
   const fetchMetadata = useCallback(async () => {
     try {
-      const response = await fetch("/api/metadata")
+      const response = await fetch("/api/metadata", { cache: "no-store" })
       const data: StreamMetadata = await response.json()
       setMetadata(data)
       setIsConnected(data.isLive !== false)
@@ -409,7 +411,7 @@ export function RadioPlayer() {
 
   useEffect(() => {
     fetchMetadata()
-    const metadataInterval = setInterval(fetchMetadata, 10000)
+    const metadataInterval = setInterval(fetchMetadata, 5000)
     return () => clearInterval(metadataInterval)
   }, [fetchMetadata])
 

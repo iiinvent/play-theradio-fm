@@ -29,13 +29,15 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono"
 });
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 async function getNowPlaying(): Promise<{ currentTrack: string; albumArt: string | null }> {
   try {
     const statusResponse = await fetch(STATUS_URL, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      next: { revalidate: 60 },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3000),
     })
 
     if (!statusResponse.ok) {
@@ -54,7 +56,8 @@ async function getNowPlaying(): Promise<{ currentTrack: string; albumArt: string
       `${SONG_COVER_URL}?q=${encodeURIComponent(currentTrack)}&base-date=${today}&hash=d58c50320d789f14c139cae9bfadc9a430a9f6fa`,
       {
         headers: { 'User-Agent': 'Mozilla/5.0' },
-        next: { revalidate: 60 },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(3000),
       }
     )
 
