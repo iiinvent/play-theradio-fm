@@ -361,9 +361,19 @@ export function RadioPlayer() {
 
     navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused"
 
-    navigator.mediaSession.setActionHandler("play", () => togglePlay())
-    navigator.mediaSession.setActionHandler("pause", () => togglePlay())
+    navigator.mediaSession.setActionHandler("play", () => {
+      // Focus window when media control is clicked
+      if (typeof window !== "undefined") window.focus()
+      togglePlay()
+    })
+    navigator.mediaSession.setActionHandler("pause", () => {
+      // Focus window when media control is clicked
+      if (typeof window !== "undefined") window.focus()
+      togglePlay()
+    })
     navigator.mediaSession.setActionHandler("stop", () => {
+      // Focus window when media control is clicked
+      if (typeof window !== "undefined") window.focus()
       if (audioRef.current) {
         audioRef.current.pause()
         setIsPlaying(false)

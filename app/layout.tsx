@@ -17,6 +17,12 @@ export const metadata: Metadata = {
   title: 'theradio.fm - Live Internet Radio',
   description: 'Listen to theradio.fm - A modern fullscreen internet radio player with live streaming, track info, and album artwork',
   generator: 'v0.app',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'theradio.fm',
+  },
   openGraph: {
     title: 'theradio.fm - Live Internet Radio',
     description: 'Listen live to theradio.fm with real-time track info and album artwork',
