@@ -222,6 +222,7 @@ export function RadioPlayer() {
   const [showSleepTimer, setShowSleepTimer] = useState(false)
   const [sleepTimerSeconds, setSleepTimerSeconds] = useState<number | null>(null)
   const [sleepTimerActive, setSleepTimerActive] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
 
   // Initialize audio analyzer
   const initializeAudioAnalyzer = useCallback(() => {
@@ -455,6 +456,7 @@ export function RadioPlayer() {
 
   // Share functionality with current track metadata — iframe-compatible
   const handleShare = async () => {
+    console.log("[v0] Share button clicked")
     const shareTitle = `${trackInfo.title} - ${trackInfo.artist}`
     const shareText = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm`
     const shareUrl = "https://play.theradio.fm"
@@ -462,19 +464,27 @@ export function RadioPlayer() {
 
     // Check if we're in an iframe
     const isInIframe = typeof window !== "undefined" && window.self !== window.top
+    console.log("[v0] Is in iframe:", isInIframe)
 
     // Try native Web Share API first (mobile & desktop)
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
+        console.log("[v0] Attempting native share API")
         await navigator.share({
           title: shareTitle,
           text: shareText,
           url: shareUrl,
         })
+        console.log("[v0] Native share succeeded")
         return
       } catch (err) {
-        // User cancelled, fall through to clipboard
-        if ((err as Error).name === "AbortError") return
+        const errorName = (err as Error)?.name
+        console.log("[v0] Native share error:", errorName)
+        // User cancelled, don't continue
+        if (errorName === "AbortError") {
+          console.log("[v0] Share cancelled by user")
+          return
+        }
         // Share API failed, continue to clipboard fallback
       }
     }
@@ -482,60 +492,49 @@ export function RadioPlayer() {
     // Fallback 1: Copy to clipboard (works in iframes if allowed)
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       try {
+        console.log("[v0] Attempting clipboard copy")
         await navigator.clipboard.writeText(shareMessage)
+        console.log("[v0] Clipboard copy succeeded")
         return
-      } catch {
+      } catch (err) {
+        console.log("[v0] Clipboard copy failed:", (err as Error).message)
         // Clipboard access denied (common in iframes) — try alternative method
       }
     }
 
-    // Fallback 2: For iframes, use postMessage to parent window
-    if (isInIframe && typeof window !== "undefined") {
+    // Fallback 2: Use legacy execCommand for maximum compatibility
+    if (typeof window !== "undefined" && typeof document !== "undefined") {
       try {
-        window.parent.postMessage(
-          {
-            type: "theradio_share",
-            data: {
-              title: shareTitle,
-              text: shareText,
-              url: shareUrl,
-              message: shareMessage,
-            },
-          },
-          "*"
-        )
-        return
-      } catch {
-        // postMessage failed
+        console.log("[v0] Attempting execCommand fallback")
+        // Create a temporary textarea element
+        const textarea = document.createElement("textarea")
+        textarea.value = shareMessage
+        textarea.style.position = "fixed"
+        textarea.style.top = "0"
+        textarea.style.left = "0"
+        textarea.style.opacity = "0"
+        textarea.style.pointerEvents = "none"
+        document.body.appendChild(textarea)
+        
+        // Select and copy
+        textarea.select()
+        textarea.setSelectionRange(0, 99999) // For mobile
+        
+        const success = document.execCommand("copy")
+        document.body.removeChild(textarea)
+        
+        if (success) {
+          console.log("[v0] execCommand copy succeeded")
+          return
+        }
+      } catch (err) {
+        console.log("[v0] execCommand failed:", (err as Error).message)
       }
     }
 
-    // Fallback 3: Open share in a new window for desktop/iframe
-    if (typeof window !== "undefined") {
-      try {
-        // Encode the share message for URL
-        const encodedShare = encodeURIComponent(shareMessage)
-        const shareUrl2 = `data:text/plain,${encodedShare}`
-        
-        // Create a temporary element to copy from
-        const tempDiv = document.createElement("div")
-        tempDiv.textContent = shareMessage
-        document.body.appendChild(tempDiv)
-        
-        const range = document.createRange()
-        range.selectNodeContents(tempDiv)
-        const selection = window.getSelection()
-        if (selection) {
-          selection.removeAllRanges()
-          selection.addRange(range)
-          document.execCommand("copy")
-          document.body.removeChild(tempDiv)
-        }
-        return
-      } catch {
-        // exec command fallback failed
-      }
-    }
+    // Fallback 3: Show share modal dialog for iframe embedding
+    console.log("[v0] Showing share modal as final fallback")
+    setShowShareModal(true)
   }
 
   // Render lava lamp visualizer
@@ -857,9 +856,20 @@ export function RadioPlayer() {
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            onClick={handleShare}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              console.log("[v0] Share button onClick triggered")
+              handleShare()
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault()
+              console.log("[v0] Share button touch ended")
+              handleShare()
+            }}
             className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/80 text-foreground shadow-md transition-all hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation md:h-14 md:w-14"
             aria-label={`Share current track: ${trackInfo.title} by ${trackInfo.artist}`}
+            type="button"
           >
             <Share2 className="h-5 w-5 md:h-6 md:w-6" aria-hidden="true" />
           </motion.button>
@@ -1127,6 +1137,116 @@ export function RadioPlayer() {
                   </button>
                 ))}
               </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Share Modal - Fallback for iframe embedding */}
+      <AnimatePresence>
+        {showShareModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[998] bg-black/50"
+              onClick={() => setShowShareModal(false)}
+              aria-hidden="true"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed left-1/2 top-1/2 z-[999] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-card p-6 shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Share track"
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Share Track</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {trackInfo.title} by {trackInfo.artist}
+                  </p>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setShowShareModal(false)}
+                  className="rounded-full p-1 hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label="Close share modal"
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </motion.button>
+              </div>
+
+              <div className="mb-4 space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-foreground">
+                    Share URL
+                  </label>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value="https://play.theradio.fm"
+                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                      aria-label="Share link"
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        const url = "https://play.theradio.fm"
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(url)
+                        }
+                      }}
+                      className="rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Copy URL
+                    </motion.button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground">
+                    Share Message
+                  </label>
+                  <div className="mt-2 flex gap-2">
+                    <textarea
+                      readOnly
+                      value={`Listening to "${trackInfo.title}" by ${trackInfo.artist}" on theradio.fm\nhttps://play.theradio.fm`}
+                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                      rows={3}
+                      aria-label="Share message"
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        const message = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\nhttps://play.theradio.fm`
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(message)
+                        }
+                      }}
+                      className="rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Copy
+                    </motion.button>
+                  </div>
+                </div>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowShareModal(false)}
+                className="w-full rounded-lg bg-secondary px-4 py-2 font-medium text-foreground transition-colors hover:bg-secondary/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Close
+              </motion.button>
             </motion.div>
           </>
         )}
