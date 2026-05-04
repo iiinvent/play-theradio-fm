@@ -455,6 +455,7 @@ export function RadioPlayer() {
 
   // Share functionality with current track metadata — iframe-compatible
   const handleShare = async () => {
+    console.log("[v0] Share button clicked")
     const shareTitle = `${trackInfo.title} - ${trackInfo.artist}`
     const shareText = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm`
     const shareUrl = "https://play.theradio.fm"
@@ -462,19 +463,27 @@ export function RadioPlayer() {
 
     // Check if we're in an iframe
     const isInIframe = typeof window !== "undefined" && window.self !== window.top
+    console.log("[v0] Is in iframe:", isInIframe)
 
     // Try native Web Share API first (mobile & desktop)
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
+        console.log("[v0] Attempting native share API")
         await navigator.share({
           title: shareTitle,
           text: shareText,
           url: shareUrl,
         })
+        console.log("[v0] Native share succeeded")
         return
       } catch (err) {
-        // User cancelled, fall through to clipboard
-        if ((err as Error).name === "AbortError") return
+        const errorName = (err as Error)?.name
+        console.log("[v0] Native share error:", errorName)
+        // User cancelled, don't continue
+        if (errorName === "AbortError") {
+          console.log("[v0] Share cancelled by user")
+          return
+        }
         // Share API failed, continue to clipboard fallback
       }
     }
@@ -482,9 +491,16 @@ export function RadioPlayer() {
     // Fallback 1: Copy to clipboard (works in iframes if allowed)
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       try {
+        console.log("[v0] Attempting clipboard copy")
         await navigator.clipboard.writeText(shareMessage)
+        console.log("[v0] Clipboard copy succeeded")
+        // Add visual feedback
+        if (typeof window !== "undefined" && window.alert) {
+          // Silently succeed — modern browsers don't show alerts
+        }
         return
-      } catch {
+      } catch (err) {
+        console.log("[v0] Clipboard copy failed:", (err as Error).message)
         // Clipboard access denied (common in iframes) — try alternative method
       }
     }
@@ -492,6 +508,7 @@ export function RadioPlayer() {
     // Fallback 2: For iframes, use postMessage to parent window
     if (isInIframe && typeof window !== "undefined") {
       try {
+        console.log("[v0] Attempting postMessage to parent")
         window.parent.postMessage(
           {
             type: "theradio_share",
@@ -504,8 +521,81 @@ export function RadioPlayer() {
           },
           "*"
         )
+        console.log("[v0] postMessage sent to parent")
         return
-      } catch {
+      } catch (err) {
+        console.log("[v0] postMessage failed:", (err as Error).message)
+        // postMessage failed
+      }
+    }
+
+    // Fallback 3: Use legacy execCommand for maximum compatibility
+    if (typeof window !== "undefined" && typeof document !== "undefined") {
+      try {
+        console.log("[v0] Attempting execCommand fallback")
+        // Create a temporary textarea element
+        const textarea = document.createElement("textarea")
+        textarea.value = shareMessage
+        textarea.style.position = "fixed"
+        textarea.style.top = "0"
+        textarea.style.left = "0"
+        textarea.style.opacity = "0"
+        textarea.style.pointerEvents = "none"
+        document.body.appendChild(textarea)
+        
+        // Select and copy
+        textarea.select()
+        textarea.setSelectionRange(0, 99999) // For mobile
+        
+        const success = document.execCommand("copy")
+        document.body.removeChild(textarea)
+        
+        if (success) {
+          console.log("[v0] execCommand copy succeeded")
+          return
+        }
+      } catch (err) {
+        console.log("[v0] execCommand failed:", (err as Error).message)
+      }
+    }
+
+    console.log("[v0] All share methods failed")
+  }
+    }
+
+    // Fallback 1: Copy to clipboard (works in iframes if allowed)
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      try {
+        console.log("[v0] Attempting clipboard copy")
+        await navigator.clipboard.writeText(shareMessage)
+        console.log("[v0] Clipboard copy succeeded")
+        return
+      } catch (err) {
+        console.log("[v0] Clipboard copy failed:", (err as Error).message)
+        // Clipboard access denied (common in iframes) — try alternative method
+      }
+    }
+
+    // Fallback 2: For iframes, use postMessage to parent window
+    if (isInIframe && typeof window !== "undefined") {
+      try {
+        console.log("[v0] Attempting postMessage to parent")
+        window.parent.postMessage(
+          {
+            type: "theradio_share",
+            data: {
+              title: shareTitle,
+              text: shareText,
+              url: shareUrl,
+              message: shareMessage,
+            },
+          },
+          "*"
+        )
+        console.log("[v0] postMessage sent")
+        return
+      } catch (err) {
+        console.log("[v0] postMessage failed:", (err as Error).message)
         // postMessage failed
       }
     }
@@ -513,10 +603,7 @@ export function RadioPlayer() {
     // Fallback 3: Open share in a new window for desktop/iframe
     if (typeof window !== "undefined") {
       try {
-        // Encode the share message for URL
-        const encodedShare = encodeURIComponent(shareMessage)
-        const shareUrl2 = `data:text/plain,${encodedShare}`
-        
+        console.log("[v0] Attempting execCommand fallback")
         // Create a temporary element to copy from
         const tempDiv = document.createElement("div")
         tempDiv.textContent = shareMessage
@@ -530,9 +617,11 @@ export function RadioPlayer() {
           selection.addRange(range)
           document.execCommand("copy")
           document.body.removeChild(tempDiv)
+          console.log("[v0] execCommand succeeded")
         }
         return
-      } catch {
+      } catch (err) {
+        console.log("[v0] execCommand failed:", (err as Error).message)
         // exec command fallback failed
       }
     }
@@ -857,9 +946,20 @@ export function RadioPlayer() {
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            onClick={handleShare}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              console.log("[v0] Share button onClick triggered")
+              handleShare()
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault()
+              console.log("[v0] Share button touch ended")
+              handleShare()
+            }}
             className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/80 text-foreground shadow-md transition-all hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation md:h-14 md:w-14"
             aria-label={`Share current track: ${trackInfo.title} by ${trackInfo.artist}`}
+            type="button"
           >
             <Share2 className="h-5 w-5 md:h-6 md:w-6" aria-hidden="true" />
           </motion.button>
