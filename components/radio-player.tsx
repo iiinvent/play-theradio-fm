@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
+import Image from "next/image"
 import {
   Play,
   Pause,
@@ -50,6 +51,7 @@ type LavaIntensity = "off" | "subtle" | "medium" | "high" | "reactive"
 
 const STREAM_URL = "https://servidor36-2.brlogic.com:7064/live"
 const STATION_LOGO_URL = "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/theradio-fm-logo-riP2RHcCrwTnJDqhSbaT3uXluubSLi.jpg"
+const SHARE_URL = "https://theradio.fm"
 
 const SLEEP_TIMER_OPTIONS = [
   { label: "15 min", value: 15 },
@@ -465,22 +467,27 @@ export function RadioPlayer() {
     console.log("[v0] Share button clicked")
     const shareTitle = `${trackInfo.title} - ${trackInfo.artist}`
     const shareText = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm`
-    const shareUrl = "https://play.theradio.fm"
+    const shareUrl = SHARE_URL
     const shareMessage = `${shareText}\n${shareUrl}`
+    const shareData = {
+      title: shareTitle,
+      text: shareText,
+      url: shareUrl,
+    }
 
     // Check if we're in an iframe
     const isInIframe = typeof window !== "undefined" && window.self !== window.top
     console.log("[v0] Is in iframe:", isInIframe)
 
     // Try native Web Share API first (mobile & desktop)
-    if (typeof navigator !== "undefined" && navigator.share) {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.share &&
+      (!navigator.canShare || navigator.canShare(shareData))
+    ) {
       try {
         console.log("[v0] Attempting native share API")
-        await navigator.share({
-          title: shareTitle,
-          text: shareText,
-          url: shareUrl,
-        })
+        await navigator.share(shareData)
         console.log("[v0] Native share succeeded")
         return
       } catch (err) {
@@ -600,9 +607,11 @@ export function RadioPlayer() {
             whileTap={{ scale: 0.95 }}
             className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-primary/30 shadow-md"
           >
-            <img
+            <Image
               src={STATION_LOGO_URL}
               alt={metadata?.name || "Station logo"}
+              width={48}
+              height={48}
               className="h-full w-full object-cover object-center"
             />
           </motion.div>
@@ -866,11 +875,6 @@ export function RadioPlayer() {
               e.preventDefault()
               e.stopPropagation()
               console.log("[v0] Share button onClick triggered")
-              handleShare()
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault()
-              console.log("[v0] Share button touch ended")
               handleShare()
             }}
             className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/80 text-foreground shadow-md transition-all hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation md:h-14 md:w-14"
@@ -1196,7 +1200,7 @@ export function RadioPlayer() {
                     <input
                       type="text"
                       readOnly
-                      value="https://play.theradio.fm"
+                      value={SHARE_URL}
                       className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                       aria-label="Share link"
                     />
@@ -1204,7 +1208,7 @@ export function RadioPlayer() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        const url = "https://play.theradio.fm"
+                        const url = SHARE_URL
                         if (navigator.clipboard) {
                           navigator.clipboard.writeText(url)
                         }
@@ -1223,7 +1227,7 @@ export function RadioPlayer() {
                   <div className="mt-2 flex gap-2">
                     <textarea
                       readOnly
-                      value={`Listening to "${trackInfo.title}" by ${trackInfo.artist}" on theradio.fm\nhttps://play.theradio.fm`}
+                      value={`Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${SHARE_URL}`}
                       className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                       rows={3}
                       aria-label="Share message"
@@ -1232,7 +1236,7 @@ export function RadioPlayer() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        const message = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\nhttps://play.theradio.fm`
+                        const message = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${SHARE_URL}`
                         if (navigator.clipboard) {
                           navigator.clipboard.writeText(message)
                         }

@@ -4,6 +4,22 @@ import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
+const APP_URL = 'https://play.theradio.fm'
+const SHARE_URL = 'https://theradio.fm'
+const DEFAULT_SHARE_IMAGE_URL = `${APP_URL}/apple-icon.jpg`
+const STATUS_URL = 'https://d36nr0u3xmc4mm.cloudfront.net/index.php/api/streaming/status/7064/c5f885b75a1075c9fba1960e4cf86fe7/SV7BR'
+const SONG_COVER_URL = 'https://brlogic-api.minhawebradio.net/api/streaming/song-cover'
+const COVER_BASE_URL = 'https://public-rf-song-cover.minhawebradio.net/'
+
+interface StreamStatus {
+  currentTrack?: string
+}
+
+interface SongCover {
+  success?: boolean
+  cover?: string
+}
+
 const geistSans = Geist({ 
   subsets: ["latin"],
   variable: "--font-geist-sans"
@@ -13,52 +29,106 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono"
 });
 
-export const metadata: Metadata = {
-  title: 'theradio.fm - Live Internet Radio',
-  description: 'Listen to theradio.fm - A modern fullscreen internet radio player with live streaming, track info, and album artwork',
-  generator: 'v0.app',
-  manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'theradio.fm',
-  },
-  openGraph: {
-    title: 'theradio.fm - Live Internet Radio',
-    description: 'Listen live to theradio.fm with real-time track info and album artwork',
-    url: 'https://play.theradio.fm',
-    siteName: 'theradio.fm',
-    type: 'music.radio_station',
-    images: [
+export const revalidate = 60
+
+async function getNowPlaying(): Promise<{ currentTrack: string; albumArt: string | null }> {
+  try {
+    const statusResponse = await fetch(STATUS_URL, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      next: { revalidate: 60 },
+    })
+
+    if (!statusResponse.ok) {
+      return { currentTrack: '', albumArt: null }
+    }
+
+    const status: StreamStatus = await statusResponse.json()
+    const currentTrack = status.currentTrack || ''
+
+    if (!currentTrack) {
+      return { currentTrack, albumArt: null }
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+    const coverResponse = await fetch(
+      `${SONG_COVER_URL}?q=${encodeURIComponent(currentTrack)}&base-date=${today}&hash=d58c50320d789f14c139cae9bfadc9a430a9f6fa`,
       {
-        url: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/theradio-fm-logo-riP2RHcCrwTnJDqhSbaT3uXluubSLi.jpg',
-        width: 512,
-        height: 512,
-        alt: 'theradio.fm logo',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'theradio.fm - Live Internet Radio',
-    description: 'Listen live to theradio.fm with real-time track info and album artwork',
-    images: ['https://hebbkx1anhila5yf.public.blob.vercel-storage.com/theradio-fm-logo-riP2RHcCrwTnJDqhSbaT3uXluubSLi.jpg'],
-  },
-  icons: {
-    icon: [
-      {
-        url: '/icon.jpg',
-        type: 'image/jpeg',
-        sizes: '512x512',
-      },
-      {
-        url: '/icon-192x192.jpg',
-        type: 'image/jpeg',
-        sizes: '192x192',
-      },
-    ],
-    apple: '/apple-icon.jpg',
-  },
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        next: { revalidate: 60 },
+      }
+    )
+
+    if (!coverResponse.ok) {
+      return { currentTrack, albumArt: null }
+    }
+
+    const cover: SongCover = await coverResponse.json()
+
+    return {
+      currentTrack,
+      albumArt: cover.success && cover.cover ? `${COVER_BASE_URL}${cover.cover}` : null,
+    }
+  } catch {
+    return { currentTrack: '', albumArt: null }
+  }
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { currentTrack, albumArt } = await getNowPlaying()
+  const title = currentTrack ? `${currentTrack} on theradio.fm` : 'theradio.fm - Live Internet Radio'
+  const description = currentTrack
+    ? `Now playing: ${currentTrack} on theradio.fm`
+    : 'Listen live to theradio.fm with real-time track info and album artwork'
+  const imageUrl = albumArt || DEFAULT_SHARE_IMAGE_URL
+  const imageAlt = currentTrack ? `${currentTrack} album art` : 'theradio.fm icon'
+
+  return {
+    title,
+    description,
+    generator: 'v0.app',
+    manifest: '/manifest.json',
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'black-translucent',
+      title: 'theradio.fm',
+    },
+    openGraph: {
+      title,
+      description,
+      url: SHARE_URL,
+      siteName: 'theradio.fm',
+      type: 'music.radio_station',
+      images: [
+        {
+          url: imageUrl,
+          width: 512,
+          height: 512,
+          alt: imageAlt,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
+    icons: {
+      icon: [
+        {
+          url: '/icon.jpg',
+          type: 'image/jpeg',
+          sizes: '512x512',
+        },
+        {
+          url: '/icon-192x192.jpg',
+          type: 'image/jpeg',
+          sizes: '192x192',
+        },
+      ],
+      apple: '/apple-icon.jpg',
+    },
+  }
 }
 
 export const viewport: Viewport = {
