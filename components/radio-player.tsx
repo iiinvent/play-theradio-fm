@@ -96,8 +96,6 @@ function LavaLampVisualizer({
   isPlaying: boolean
   intensity: LavaIntensity 
 }) {
-  if (intensity === "off") return null
-  
   // Calculate audio energy for reactive mode
   const avgEnergy = analyzerData.length > 0 
     ? analyzerData.reduce((a, b) => a + b, 0) / analyzerData.length / 255 
@@ -105,6 +103,7 @@ function LavaLampVisualizer({
 
   // Intensity settings
   const settings = {
+    off: { blobCount: 0, opacity: 0, speed: 1, movement: 0, blur: "blur-2xl", saturation: 0 },
     subtle: { blobCount: 4, opacity: 0.3, speed: 1.8, movement: 15, blur: "blur-2xl", saturation: 50 },
     medium: { blobCount: 6, opacity: 0.5, speed: 1.2, movement: 25, blur: "blur-xl", saturation: 65 },
     high: { blobCount: 8, opacity: 0.7, speed: 0.8, movement: 40, blur: "blur-lg", saturation: 80 },
@@ -131,6 +130,8 @@ function LavaLampVisualizer({
       delay: i * 0.5,
     })), [config.blobCount]
   )
+
+  if (intensity === "off") return null
 
   return (
     <div className="absolute inset-0 overflow-hidden">
@@ -429,8 +430,13 @@ export function RadioPlayer() {
         if (audioContextRef.current?.state === "suspended") {
           await audioContextRef.current.resume()
         }
-        
-        audioRef.current.src = STREAM_URL
+
+        const streamUrl = metadata?.streamUrl || STREAM_URL
+        if (audioRef.current.src !== streamUrl) {
+          audioRef.current.pause()
+          audioRef.current.src = streamUrl
+          audioRef.current.load()
+        }
         audioRef.current.volume = 1
         await audioRef.current.play()
         setIsPlaying(true)
