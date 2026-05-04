@@ -17,6 +17,7 @@ import {
   Settings2,
   X,
   Activity,
+  Share2,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { motion, AnimatePresence } from "framer-motion"
@@ -442,6 +443,38 @@ export function RadioPlayer() {
   const trackInfo = parseTrackInfo(metadata?.currentTrack)
   const albumArtUrl = proxyImageUrl(metadata?.albumArt)
 
+  // Share functionality with current track metadata
+  const handleShare = async () => {
+    const shareTitle = `${trackInfo.title} - ${trackInfo.artist}`
+    const shareText = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm`
+    const shareUrl = typeof window !== "undefined" ? window.location.href : "https://theradio.fm"
+
+    // Try native Web Share API first (mobile)
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        })
+        return
+      } catch (err) {
+        // User cancelled or share failed, fall through to clipboard
+        if ((err as Error).name === "AbortError") return
+      }
+    }
+
+    // Fallback: copy to clipboard
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`)
+        // Could add a toast notification here
+      } catch {
+        // Clipboard failed silently
+      }
+    }
+  }
+
   // Render lava lamp visualizer
   const renderVisualizer = () => {
     return (
@@ -507,7 +540,7 @@ export function RadioPlayer() {
           </motion.div>
           <div>
             <h1 className="text-lg font-bold text-foreground">
-              {metadata?.name || "RadioStream"}
+              {metadata?.name || "theradio.fm"}
             </h1>
             <div className="flex items-center gap-2" role="status" aria-live="polite">
               <motion.span
@@ -755,8 +788,20 @@ export function RadioPlayer() {
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.3, type: "spring" }}
-          className="mb-8 flex items-center justify-center gap-6"
+          className="mb-8 flex items-center justify-center gap-4 md:gap-6"
         >
+          {/* Share Button */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={handleShare}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/80 text-foreground shadow-md transition-all hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation md:h-14 md:w-14"
+            aria-label={`Share current track: ${trackInfo.title} by ${trackInfo.artist}`}
+          >
+            <Share2 className="h-5 w-5 md:h-6 md:w-6" aria-hidden="true" />
+          </motion.button>
+
+          {/* Play/Pause Button */}
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}

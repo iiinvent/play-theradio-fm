@@ -14,9 +14,29 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'RadioStream - Internet Radio Player',
-  description: 'A modern fullscreen internet radio player with ICY metadata support and album artwork',
+  title: 'theradio.fm - Live Internet Radio',
+  description: 'Listen to theradio.fm - A modern fullscreen internet radio player with live streaming, track info, and album artwork',
   generator: 'v0.app',
+  openGraph: {
+    title: 'theradio.fm - Live Internet Radio',
+    description: 'Listen live to theradio.fm with real-time track info and album artwork',
+    siteName: 'theradio.fm',
+    type: 'music.radio_station',
+    images: [
+      {
+        url: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/theradio-fm-logo-riP2RHcCrwTnJDqhSbaT3uXluubSLi.jpg',
+        width: 512,
+        height: 512,
+        alt: 'theradio.fm logo',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'theradio.fm - Live Internet Radio',
+    description: 'Listen live to theradio.fm with real-time track info and album artwork',
+    images: ['https://hebbkx1anhila5yf.public.blob.vercel-storage.com/theradio-fm-logo-riP2RHcCrwTnJDqhSbaT3uXluubSLi.jpg'],
+  },
   icons: {
     icon: [
       {
@@ -38,8 +58,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#fafafa' },
-    { media: '(prefers-color-scheme: dark)', color: '#171717' },
+    { media: '(prefers-color-scheme: light)', color: '#1a4a4a' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f2929' },
   ],
   width: 'device-width',
   initialScale: 1,
