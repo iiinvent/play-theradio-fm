@@ -331,6 +331,51 @@ export function RadioPlayer() {
     setSleepTimerActive(false)
   }
 
+  // Media Session API — updates OS/browser media controls
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
+
+    const track = parseTrackInfo(metadata?.currentTrack)
+    const artSrc = proxyImageUrl(metadata?.albumArt)
+
+    // Build an absolute URL for artwork (Media Session requires absolute URLs in some browsers)
+    const origin = typeof window !== "undefined" ? window.location.origin : ""
+    const absoluteArtSrc = artSrc?.startsWith("/") ? `${origin}${artSrc}` : artSrc
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: track.artist,
+      album: metadata?.name || "theradio.fm",
+      artwork: absoluteArtSrc
+        ? [
+            { src: absoluteArtSrc, sizes: "512x512", type: "image/jpeg" },
+            { src: absoluteArtSrc, sizes: "256x256", type: "image/jpeg" },
+            { src: absoluteArtSrc, sizes: "128x128", type: "image/jpeg" },
+          ]
+        : [
+            { src: STATION_LOGO_URL, sizes: "512x512", type: "image/jpeg" },
+            { src: STATION_LOGO_URL, sizes: "256x256", type: "image/jpeg" },
+          ],
+    })
+
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused"
+
+    navigator.mediaSession.setActionHandler("play", () => togglePlay())
+    navigator.mediaSession.setActionHandler("pause", () => togglePlay())
+    navigator.mediaSession.setActionHandler("stop", () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        setIsPlaying(false)
+      }
+    })
+
+    // Clear seek/track handlers — live stream has no seeking or tracks
+    navigator.mediaSession.setActionHandler("seekbackward", null)
+    navigator.mediaSession.setActionHandler("seekforward", null)
+    navigator.mediaSession.setActionHandler("previoustrack", null)
+    navigator.mediaSession.setActionHandler("nexttrack", null)
+  }, [metadata, isPlaying]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch stream metadata
   const fetchMetadata = useCallback(async () => {
     try {
