@@ -453,14 +453,17 @@ export function RadioPlayer() {
   const trackInfo = parseTrackInfo(metadata?.currentTrack)
   const albumArtUrl = proxyImageUrl(metadata?.albumArt)
 
-  // Share functionality with current track metadata
+  // Share functionality with current track metadata — iframe-compatible
   const handleShare = async () => {
     const shareTitle = `${trackInfo.title} - ${trackInfo.artist}`
     const shareText = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm`
-    // Share the play.theradio.fm URL but mention theradio.fm in text
     const shareUrl = "https://play.theradio.fm"
+    const shareMessage = `${shareText}\n${shareUrl}`
 
-    // Try native Web Share API first (mobile)
+    // Check if we're in an iframe
+    const isInIframe = typeof window !== "undefined" && window.self !== window.top
+
+    // Try native Web Share API first (mobile & desktop)
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
@@ -470,18 +473,67 @@ export function RadioPlayer() {
         })
         return
       } catch (err) {
-        // User cancelled or share failed, fall through to clipboard
+        // User cancelled, fall through to clipboard
         if ((err as Error).name === "AbortError") return
+        // Share API failed, continue to clipboard fallback
       }
     }
 
-    // Fallback: copy to clipboard
+    // Fallback 1: Copy to clipboard (works in iframes if allowed)
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       try {
-        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`)
-        // Could add a toast notification here
+        await navigator.clipboard.writeText(shareMessage)
+        return
       } catch {
-        // Clipboard failed silently
+        // Clipboard access denied (common in iframes) — try alternative method
+      }
+    }
+
+    // Fallback 2: For iframes, use postMessage to parent window
+    if (isInIframe && typeof window !== "undefined") {
+      try {
+        window.parent.postMessage(
+          {
+            type: "theradio_share",
+            data: {
+              title: shareTitle,
+              text: shareText,
+              url: shareUrl,
+              message: shareMessage,
+            },
+          },
+          "*"
+        )
+        return
+      } catch {
+        // postMessage failed
+      }
+    }
+
+    // Fallback 3: Open share in a new window for desktop/iframe
+    if (typeof window !== "undefined") {
+      try {
+        // Encode the share message for URL
+        const encodedShare = encodeURIComponent(shareMessage)
+        const shareUrl2 = `data:text/plain,${encodedShare}`
+        
+        // Create a temporary element to copy from
+        const tempDiv = document.createElement("div")
+        tempDiv.textContent = shareMessage
+        document.body.appendChild(tempDiv)
+        
+        const range = document.createRange()
+        range.selectNodeContents(tempDiv)
+        const selection = window.getSelection()
+        if (selection) {
+          selection.removeAllRanges()
+          selection.addRange(range)
+          document.execCommand("copy")
+          document.body.removeChild(tempDiv)
+        }
+        return
+      } catch {
+        // exec command fallback failed
       }
     }
   }
