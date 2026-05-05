@@ -54,6 +54,8 @@ const STATION_LOGO_URL = "https://hebbkx1anhila5yf.public.blob.vercel-storage.co
 const DEFAULT_SHARE_IMAGE_URL = "/apple-icon.jpg"
 const SHARE_URL = "https://theradio.fm"
 
+const buildRealtimeShareUrl = () => `${SHARE_URL}?np=${Date.now()}`
+
 const SLEEP_TIMER_OPTIONS = [
   { label: "15 min", value: 15 },
   { label: "30 min", value: 30 },
@@ -107,14 +109,14 @@ function LavaLampVisualizer({
   // Intensity settings
   const settings = {
     off: { blobCount: 0, opacity: 0, speed: 1, movement: 0, blur: "blur-2xl", saturation: 0 },
-    subtle: { blobCount: 4, opacity: 0.3, speed: 1.8, movement: 15, blur: "blur-2xl", saturation: 50 },
-    medium: { blobCount: 6, opacity: 0.5, speed: 1.2, movement: 25, blur: "blur-xl", saturation: 65 },
-    high: { blobCount: 8, opacity: 0.7, speed: 0.8, movement: 40, blur: "blur-lg", saturation: 80 },
-    reactive: { blobCount: 8, opacity: 0.8, speed: 0.6, movement: 50, blur: "blur-lg", saturation: 85 },
+    subtle: { blobCount: 5, opacity: 0.38, speed: 1.45, movement: 24, blur: "blur-2xl", saturation: 62 },
+    medium: { blobCount: 8, opacity: 0.64, speed: 0.9, movement: 46, blur: "blur-xl", saturation: 78 },
+    high: { blobCount: 10, opacity: 0.82, speed: 0.62, movement: 72, blur: "blur-lg", saturation: 92 },
+    reactive: { blobCount: 12, opacity: 0.9, speed: 0.45, movement: 88, blur: "blur-lg", saturation: 96 },
   }
 
   const config = settings[intensity] || settings.medium
-  const reactiveMultiplier = intensity === "reactive" ? (1 + avgEnergy * 1.5) : 1
+  const reactiveMultiplier = intensity === "reactive" ? (1 + avgEnergy * 2.2) : 1
 
   // Use deterministic pseudo-random values based on index to avoid hydration mismatch
   const seededRandom = (seed: number) => {
@@ -125,12 +127,12 @@ function LavaLampVisualizer({
   const blobs = useMemo(() => 
     Array.from({ length: config.blobCount }, (_, i) => ({
       id: i,
-      x: 10 + (i % 4) * 22 + seededRandom(i + 1) * 15,
-      size: 100 + seededRandom(i + 10) * 80,
+      x: 4 + (i % 5) * 22 + seededRandom(i + 1) * 18,
+      size: 130 + seededRandom(i + 10) * 120,
       // Alternate between crimson red (0-20) and teal (170-190) from logo
       hue: i % 2 === 0 ? 5 + (i * 5) % 20 : 175 + (i * 5) % 20,
-      speed: 10 + seededRandom(i + 20) * 8,
-      delay: i * 0.5,
+      speed: 7 + seededRandom(i + 20) * 7,
+      delay: i * 0.28,
     })), [config.blobCount]
   )
 
@@ -139,7 +141,7 @@ function LavaLampVisualizer({
   return (
     <div className="absolute inset-0 overflow-hidden">
       {blobs.map((blob) => {
-        const blobOpacity = config.opacity * (intensity === "reactive" ? (0.5 + avgEnergy * 0.5) : 1)
+        const blobOpacity = config.opacity * (intensity === "reactive" ? (0.65 + avgEnergy * 0.7) : 1)
         const animationSpeed = blob.speed * config.speed / reactiveMultiplier
         
         return (
@@ -156,20 +158,22 @@ function LavaLampVisualizer({
                 transparent 70%)`,
             }}
             animate={{
-              y: ["85%", "5%", "85%"],
+              y: ["92%", "58%", "8%", "34%", "92%"],
               x: [
                 `${blob.x}%`, 
                 `${blob.x + (Math.sin(blob.id) * config.movement)}%`, 
                 `${blob.x - (Math.cos(blob.id) * config.movement * 0.5)}%`,
+                `${blob.x + (Math.sin(blob.id + 2) * config.movement * 0.7)}%`,
                 `${blob.x}%`
               ],
               scale: intensity === "reactive" 
-                ? [1, 1.1 + avgEnergy * 0.4, 1.05, 1] 
-                : [1, 1.1, 1.05, 1],
+                ? [1, 1.2 + avgEnergy * 0.65, 0.9 + avgEnergy * 0.35, 1.15, 1] 
+                : [1, 1.18, 0.92, 1.12, 1],
               borderRadius: [
                 "50% 50% 50% 50%", 
                 "40% 60% 55% 45%", 
                 "55% 45% 40% 60%",
+                "35% 65% 45% 55%",
                 "50% 50% 50% 50%"
               ],
             }}
@@ -178,7 +182,7 @@ function LavaLampVisualizer({
               repeat: Infinity,
               ease: "easeInOut",
               delay: blob.delay,
-              times: [0, 0.4, 0.7, 1],
+              times: [0, 0.25, 0.55, 0.78, 1],
             }}
           />
         )
@@ -189,13 +193,14 @@ function LavaLampVisualizer({
         className="pointer-events-none absolute inset-0"
         style={{
           background: `radial-gradient(ellipse at 50% 100%, 
-            hsla(10, 70%, 35%, ${config.opacity * 0.15}), 
-            transparent 60%)`,
+            hsla(10, 85%, 30%, ${config.opacity * 0.28}), 
+            hsla(178, 80%, 24%, ${config.opacity * 0.16}),
+            transparent 68%)`,
         }}
         animate={{
-          opacity: intensity === "reactive" ? [0.5, 0.8 + avgEnergy * 0.2, 0.5] : [0.5, 0.7, 0.5],
+          opacity: intensity === "reactive" ? [0.62, 0.95 + avgEnergy * 0.25, 0.62] : [0.58, 0.86, 0.58],
         }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
       />
     </div>
   )
@@ -469,7 +474,7 @@ export function RadioPlayer() {
     console.log("[v0] Share button clicked")
     const shareTitle = `${trackInfo.title} - ${trackInfo.artist}`
     const shareText = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm`
-    const shareUrl = SHARE_URL
+    const shareUrl = buildRealtimeShareUrl()
     const shareMessage = `${shareText}\n${shareUrl}`
     const shareData = {
       title: shareTitle,
@@ -770,22 +775,31 @@ export function RadioPlayer() {
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.6, type: "spring" }}
-          className="relative mb-8 aspect-square w-full max-w-[320px] md:max-w-[400px]"
+          className="relative mb-8 aspect-square w-full max-w-[320px] rounded-2xl md:max-w-[400px]"
         >
+          <motion.div
+            aria-hidden="true"
+            className="absolute -inset-6 rounded-[2rem] bg-background/45 blur-2xl"
+            animate={{
+              opacity: isPlaying ? [0.78, 0.94, 0.78] : 0.82,
+              scale: isPlaying ? [1, 1.03, 1] : 1,
+            }}
+            transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+          />
           <motion.div
             animate={{
               boxShadow: isPlaying
                 ? [
-                    "0 0 20px rgba(var(--primary), 0.3)",
-                    "0 0 60px rgba(var(--primary), 0.2)",
-                    "0 0 20px rgba(var(--primary), 0.3)",
+                    "0 28px 95px rgba(0,0,0,0.78), 0 0 34px rgba(var(--primary), 0.22)",
+                    "0 34px 120px rgba(0,0,0,0.88), 0 0 62px rgba(var(--primary), 0.34)",
+                    "0 28px 95px rgba(0,0,0,0.78), 0 0 34px rgba(var(--primary), 0.22)",
                   ]
-                : "0 0 20px rgba(0,0,0,0.1)",
+                : "0 26px 86px rgba(0,0,0,0.76)",
             }}
-            transition={{ duration: 2, repeat: Infinity }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
             className="absolute inset-0 rounded-2xl"
           />
-          <div className="relative h-full w-full overflow-hidden rounded-2xl bg-secondary/80 shadow-2xl backdrop-blur-sm">
+          <div className="relative h-full w-full overflow-hidden rounded-2xl border border-black/30 bg-secondary/90 shadow-2xl backdrop-blur-sm">
             <AnimatePresence mode="wait">
               {albumArtUrl ? (
                 <motion.img
@@ -819,9 +833,68 @@ export function RadioPlayer() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent"
+                className="absolute inset-0 bg-gradient-to-t from-background/36 via-transparent to-black/10"
               />
             )}
+
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-4 md:p-5">
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  console.log("[v0] Share button onClick triggered")
+                  handleShare()
+                }}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/90 text-foreground shadow-lg backdrop-blur-md transition-all hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation md:h-14 md:w-14"
+                aria-label={`Share current track: ${trackInfo.title} by ${trackInfo.artist}`}
+                type="button"
+              >
+                <Share2 className="h-5 w-5 md:h-6 md:w-6" aria-hidden="true" />
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={togglePlay}
+                disabled={isLoading}
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-primary shadow-lg transition-all disabled:opacity-50 md:h-20 md:w-20 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation"
+                aria-label={isLoading ? "Loading stream" : isPlaying ? "Pause playback" : "Play stream"}
+                aria-busy={isLoading}
+              >
+                <AnimatePresence mode="wait">
+                  {isLoading ? (
+                    <motion.div
+                      key="loading"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1, rotate: 360 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ rotate: { duration: 1, repeat: Infinity, ease: "linear" } }}
+                      className="h-7 w-7 rounded-full border-4 border-primary-foreground border-t-transparent md:h-8 md:w-8"
+                    />
+                  ) : isPlaying ? (
+                    <motion.div
+                      key="pause"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                    >
+                      <Pause className="h-7 w-7 text-primary-foreground md:h-9 md:w-9" />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="play"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                    >
+                      <Play className="ml-1 h-7 w-7 text-primary-foreground md:h-9 md:w-9" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            </div>
           </div>
         </motion.div>
 
@@ -860,73 +933,6 @@ export function RadioPlayer() {
           <span className="sr-only">
             Now playing: {trackInfo.title} by {trackInfo.artist}
           </span>
-        </motion.div>
-
-        {/* Playback Controls */}
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.3, type: "spring" }}
-          className="mb-8 flex items-center justify-center gap-4 md:gap-6"
-        >
-          {/* Share Button */}
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              console.log("[v0] Share button onClick triggered")
-              handleShare()
-            }}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/80 text-foreground shadow-md transition-all hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation md:h-14 md:w-14"
-            aria-label={`Share current track: ${trackInfo.title} by ${trackInfo.artist}`}
-            type="button"
-          >
-            <Share2 className="h-5 w-5 md:h-6 md:w-6" aria-hidden="true" />
-          </motion.button>
-
-          {/* Play/Pause Button */}
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={togglePlay}
-            disabled={isLoading}
-            className="flex h-20 w-20 items-center justify-center rounded-full bg-primary shadow-lg transition-all disabled:opacity-50 md:h-24 md:w-24 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation"
-            aria-label={isLoading ? "Loading stream" : isPlaying ? "Pause playback" : "Play stream"}
-            aria-busy={isLoading}
-          >
-            <AnimatePresence mode="wait">
-              {isLoading ? (
-                <motion.div
-                  key="loading"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1, rotate: 360 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ rotate: { duration: 1, repeat: Infinity, ease: "linear" } }}
-                  className="h-8 w-8 rounded-full border-4 border-primary-foreground border-t-transparent"
-                />
-              ) : isPlaying ? (
-                <motion.div
-                  key="pause"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                >
-                  <Pause className="h-8 w-8 text-primary-foreground md:h-10 md:w-10" />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="play"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                >
-                  <Play className="ml-1 h-8 w-8 text-primary-foreground md:h-10 md:w-10" />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.button>
         </motion.div>
 
         {/* Current Program Card */}
@@ -1202,7 +1208,7 @@ export function RadioPlayer() {
                     <input
                       type="text"
                       readOnly
-                      value={SHARE_URL}
+                      value={buildRealtimeShareUrl()}
                       className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                       aria-label="Share link"
                     />
@@ -1210,7 +1216,7 @@ export function RadioPlayer() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        const url = SHARE_URL
+                        const url = buildRealtimeShareUrl()
                         if (navigator.clipboard) {
                           navigator.clipboard.writeText(url)
                         }
@@ -1229,7 +1235,7 @@ export function RadioPlayer() {
                   <div className="mt-2 flex gap-2">
                     <textarea
                       readOnly
-                      value={`Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${SHARE_URL}`}
+                      value={`Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildRealtimeShareUrl()}`}
                       className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                       rows={3}
                       aria-label="Share message"
@@ -1238,7 +1244,7 @@ export function RadioPlayer() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        const message = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${SHARE_URL}`
+                        const message = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildRealtimeShareUrl()}`
                         if (navigator.clipboard) {
                           navigator.clipboard.writeText(message)
                         }
