@@ -9,13 +9,10 @@ import {
   Pause,
   Sparkles,
   Palette,
-  Wifi,
   Mic,
-  ChevronDown,
   Timer,
   Settings2,
   X,
-  Activity,
   Share2,
 } from "lucide-react"
 import { useTheme } from "next-themes"
@@ -284,7 +281,6 @@ export function RadioPlayer() {
   const [showVisualizerMenu, setShowVisualizerMenu] = useState(false)
   
   // UI states
-  const [isStreamInfoExpanded, setIsStreamInfoExpanded] = useState(false)
   const [showSleepTimer, setShowSleepTimer] = useState(false)
   const [sleepTimerSeconds, setSleepTimerSeconds] = useState<number | null>(null)
   /** Preset minutes for the running timer — used to highlight the active option (remaining seconds alone is ambiguous). */
@@ -831,7 +827,7 @@ export function RadioPlayer() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.98 }}
                   transition={{ duration: 0.15 }}
-                  className="liquid-glass liquid-glass--menu max-w-[min(calc(100vw-2rem),20rem)] min-w-[16rem] rounded-xl p-2 shadow-xl"
+                  className="max-w-[min(calc(100vw-2rem),20rem)] min-w-[16rem] overflow-visible rounded-xl border border-border bg-card p-2 text-card-foreground shadow-xl"
                   role="menu"
                   aria-label="Visual effects intensity options"
                 >
@@ -905,7 +901,7 @@ export function RadioPlayer() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.98 }}
                   transition={{ duration: 0.15 }}
-                  className="liquid-glass liquid-glass--menu max-w-[min(calc(100vw-2rem),18rem)] min-w-[16rem] rounded-xl p-2 shadow-xl"
+                  className="max-w-[min(calc(100vw-2rem),18rem)] min-w-[16rem] overflow-visible rounded-xl border border-border bg-card p-2 text-card-foreground shadow-xl"
                   role="menu"
                   aria-label="Sleep timer options"
                 >
@@ -969,7 +965,7 @@ export function RadioPlayer() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="liquid-glass-sm fixed left-1/2 top-20 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-full px-3.5 py-2 md:gap-3 md:px-5 md:py-2.5"
+            className="fixed left-1/2 top-20 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 shadow-lg md:gap-3 md:px-5 md:py-2.5"
           >
             <Timer className="h-3.5 w-3.5 shrink-0 text-primary md:h-4 md:w-4" aria-hidden="true" />
             <span className="font-mono text-base font-semibold tabular-nums tracking-tight text-foreground md:text-lg">
@@ -1019,8 +1015,7 @@ export function RadioPlayer() {
             transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
             className="absolute inset-0 rounded-2xl"
           />
-          <div className="liquid-glass relative h-full w-full overflow-hidden rounded-2xl">
-            {/* Art fills the frame; .liquid-glass > * sets position:relative — keep media in this block only */}
+          <div className="relative h-full w-full overflow-hidden rounded-2xl border border-border">
             <div className="relative z-0 h-full min-h-0 w-full">
               <AnimatePresence mode="wait">
                 {albumArtUrl ? (
@@ -1057,12 +1052,11 @@ export function RadioPlayer() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="pointer-events-none !absolute inset-0 z-[3] bg-gradient-to-t from-background/36 via-transparent to-black/10"
+                className="pointer-events-none absolute inset-0 z-[3] bg-gradient-to-t from-background/36 via-transparent to-black/10"
               />
             )}
 
-            {/* Must use !absolute: globals .liquid-glass > * { position:relative } wins over .absolute */}
-            <div className="pointer-events-none !absolute inset-0 z-[25]">
+            <div className="pointer-events-none absolute inset-0 z-[25]">
               <motion.button
                 whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.94 }}
@@ -1071,7 +1065,7 @@ export function RadioPlayer() {
                   e.stopPropagation()
                   handleShare()
                 }}
-                className="pointer-events-auto !absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent active:scale-90 touch-manipulation md:right-4 md:top-4 md:h-12 md:w-12"
+                className="pointer-events-auto absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-black/55 text-white shadow-lg transition-colors hover:bg-black/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent active:scale-90 touch-manipulation md:right-4 md:top-4 md:h-12 md:w-12"
                 aria-label={`Share current track: ${trackInfo.title} by ${trackInfo.artist}`}
                 type="button"
               >
@@ -1083,7 +1077,7 @@ export function RadioPlayer() {
                 whileTap={{ scale: 0.96 }}
                 onClick={togglePlay}
                 disabled={isLoading}
-                className="pointer-events-auto !absolute bottom-4 left-1/2 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full border border-white/45 bg-white/22 text-white shadow-2xl shadow-black/35 backdrop-blur-xl transition-all hover:bg-white/30 disabled:opacity-50 md:bottom-5 md:h-[4.75rem] md:w-[4.75rem] focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent active:scale-90 touch-manipulation"
+                className="pointer-events-auto absolute bottom-4 left-1/2 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full border border-red-700/60 bg-red-600 text-white shadow-2xl shadow-red-950/45 transition-all hover:bg-red-700 disabled:opacity-50 md:bottom-5 md:h-[4.75rem] md:w-[4.75rem] focus:outline-none focus-visible:ring-4 focus-visible:ring-red-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent active:scale-90 touch-manipulation"
                 aria-label={isLoading ? "Loading stream" : isPlaying ? "Pause playback" : "Play stream"}
                 aria-busy={isLoading}
               >
@@ -1127,7 +1121,7 @@ export function RadioPlayer() {
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="liquid-glass mb-4 w-full max-w-[400px] rounded-2xl px-4 py-4 text-center md:mb-5 md:rounded-3xl md:px-5 md:py-5"
+          className="mb-4 w-full max-w-[400px] rounded-2xl border border-border bg-card px-4 py-4 text-center shadow-md md:mb-5 md:rounded-3xl md:px-5 md:py-5"
           role="region"
           aria-label="Now playing"
           aria-live="polite"
@@ -1168,16 +1162,9 @@ export function RadioPlayer() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="liquid-glass mb-3 w-full max-w-[400px] rounded-2xl px-4 py-3.5 md:mb-4 md:px-5 md:py-4"
+              className="mb-3 w-full max-w-[400px] rounded-2xl border border-border bg-card px-4 py-3.5 shadow-md md:mb-4 md:px-5 md:py-4"
             >
               <div className="flex flex-col items-center text-center">
-                <motion.div
-                  animate={{ scale: [1, 1.05, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-primary/15 shadow-inner backdrop-blur-xl md:mb-2.5 md:h-12 md:w-12"
-                >
-                  <Mic className="h-6 w-6 text-primary md:h-7 md:w-7" />
-                </motion.div>
                 <div className="mb-1.5 flex items-center justify-center gap-1.5">
                   <motion.div
                     animate={{ opacity: [1, 0.5, 1] }}
@@ -1200,123 +1187,6 @@ export function RadioPlayer() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Stream Info Card - Collapsible */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="liquid-glass w-full max-w-[400px] overflow-hidden rounded-2xl"
-        >
-          <motion.button
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setIsStreamInfoExpanded(!isStreamInfoExpanded)}
-            className="relative flex w-full items-center justify-center gap-2 px-4 py-3 md:gap-2.5 md:px-5 md:py-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary touch-manipulation"
-            aria-expanded={isStreamInfoExpanded}
-            aria-controls="stream-info-content"
-          >
-            <Wifi className="h-4 w-4 shrink-0 text-primary md:h-[18px] md:w-[18px]" aria-hidden="true" />
-            <h3 className="text-sm font-semibold leading-tight text-card-foreground md:text-base">
-              Stream Information
-            </h3>
-            <motion.div
-              animate={{ rotate: isStreamInfoExpanded ? 180 : 0 }}
-              transition={{ duration: 0.3 }}
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 md:right-4"
-              aria-hidden="true"
-            >
-              <ChevronDown className="h-4 w-4 text-muted-foreground md:h-[18px] md:w-[18px]" />
-            </motion.div>
-          </motion.button>
-
-          <AnimatePresence>
-            {isStreamInfoExpanded && (
-              <motion.div
-                id="stream-info-content"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="overflow-hidden"
-              >
-                <dl className="space-y-0 border-t border-border/80 px-4 pb-4 pt-0.5 text-xs md:px-5 md:pb-4 md:text-sm">
-                  <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 first:pt-1.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
-                    <dt className="shrink-0 text-muted-foreground">Station</dt>
-                    <dd className="min-w-0 break-words font-medium leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
-                      {metadata?.name || "Loading..."}
-                    </dd>
-                  </div>
-
-                  {metadata?.genre && (
-                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
-                      <dt className="shrink-0 text-muted-foreground">Genre</dt>
-                      <dd className="min-w-0 break-words font-medium leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
-                        {metadata.genre}
-                      </dd>
-                    </div>
-                  )}
-
-                  {metadata?.bitrate && (
-                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
-                      <dt className="shrink-0 text-muted-foreground">Bitrate</dt>
-                      <dd className="min-w-0 font-medium tabular-nums leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
-                        {metadata.bitrate} kbps
-                      </dd>
-                    </div>
-                  )}
-
-                  {metadata?.contentType && (
-                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
-                      <dt className="shrink-0 text-muted-foreground">Format</dt>
-                      <dd className="min-w-0 break-words font-medium leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
-                        {metadata.contentType}
-                      </dd>
-                    </div>
-                  )}
-
-                  {metadata?.server && (
-                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
-                      <dt className="shrink-0 text-muted-foreground">Server</dt>
-                      <dd className="min-w-0 break-all font-medium leading-snug text-card-foreground sm:max-w-[65%] sm:text-right">
-                        {metadata.server}
-                      </dd>
-                    </div>
-                  )}
-
-                  {metadata?.metaInterval && (
-                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
-                      <dt className="shrink-0 text-muted-foreground">Meta Interval</dt>
-                      <dd className="min-w-0 font-medium tabular-nums leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
-                        {metadata.metaInterval} bytes
-                      </dd>
-                    </div>
-                  )}
-
-                  {metadata?.currentTrack && (
-                    <div className="border-b border-border/60 py-3">
-                      <dt className="flex items-center gap-1.5 text-muted-foreground">
-                        <Activity className="h-3.5 w-3.5 shrink-0 md:h-4 md:w-4" />
-                        <span>Now playing</span>
-                      </dt>
-                      <dd className="mt-1.5 text-pretty font-medium leading-snug text-card-foreground">
-                        {metadata.currentTrack}
-                      </dd>
-                    </div>
-                  )}
-
-                  {metadata?.description && (
-                    <div className="mt-0.5 border-t border-border/80 pt-3">
-                      <dt className="text-muted-foreground">Description</dt>
-                      <dd className="mt-1.5 text-pretty leading-relaxed text-card-foreground">
-                        {metadata.description}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
       </main>
 
       {/* Visualizer Overlay - Between background and content */}
@@ -1330,7 +1200,8 @@ export function RadioPlayer() {
             transition={{ duration: 0.5 }}
             className="absolute inset-0"
           >
-            {renderVisualizer()}
+            {/* Client-only: Framer Motion + computed blob styles serialize differently SSR vs browser → hydration mismatch */}
+            {mounted ? renderVisualizer() : null}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -1343,7 +1214,7 @@ export function RadioPlayer() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[998] bg-black/55 backdrop-blur-sm"
+              className="fixed inset-0 z-[998] bg-black/60"
               onClick={() => setShowShareModal(false)}
               aria-hidden="true"
             />
@@ -1351,7 +1222,7 @@ export function RadioPlayer() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="liquid-glass fixed left-1/2 top-1/2 z-[999] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6 md:p-7"
+              className="fixed left-1/2 top-1/2 z-[999] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-6 shadow-2xl md:p-7"
               role="dialog"
               aria-modal="true"
               aria-label="Share track"
@@ -1370,7 +1241,7 @@ export function RadioPlayer() {
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => setShowShareModal(false)}
-                  className="rounded-full border border-white/10 bg-white/10 p-1 shadow-sm backdrop-blur-xl hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="rounded-full border border-border bg-muted p-1 shadow-sm hover:bg-muted/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   aria-label="Close share modal"
                 >
                   <X className="h-5 w-5" aria-hidden="true" />
@@ -1387,7 +1258,7 @@ export function RadioPlayer() {
                       type="text"
                       readOnly
                       value={buildRealtimeShareUrl()}
-                      className="min-h-[42px] flex-1 rounded-lg border border-white/10 bg-background/35 px-3 py-2.5 text-sm leading-snug text-foreground shadow-inner backdrop-blur-xl"
+                      className="min-h-[42px] flex-1 rounded-lg border border-input bg-muted px-3 py-2.5 text-sm leading-snug text-foreground shadow-inner"
                       aria-label="Share link"
                     />
                     <motion.button
@@ -1399,7 +1270,7 @@ export function RadioPlayer() {
                           navigator.clipboard.writeText(url)
                         }
                       }}
-                      className="shrink-0 rounded-lg border border-white/10 bg-primary/85 px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 backdrop-blur-xl transition-colors hover:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="shrink-0 rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       Copy URL
                     </motion.button>
@@ -1414,7 +1285,7 @@ export function RadioPlayer() {
                     <textarea
                       readOnly
                       value={`Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildRealtimeShareUrl()}`}
-                      className="min-h-[5.5rem] flex-1 resize-none rounded-lg border border-white/10 bg-background/35 px-3 py-2.5 text-sm leading-relaxed text-foreground shadow-inner backdrop-blur-xl"
+                      className="min-h-[5.5rem] flex-1 resize-none rounded-lg border border-input bg-muted px-3 py-2.5 text-sm leading-relaxed text-foreground shadow-inner"
                       rows={3}
                       aria-label="Share message"
                     />
@@ -1427,7 +1298,7 @@ export function RadioPlayer() {
                           navigator.clipboard.writeText(message)
                         }
                       }}
-                      className="shrink-0 self-start rounded-lg border border-white/10 bg-primary/85 px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 backdrop-blur-xl transition-colors hover:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:self-stretch"
+                      className="shrink-0 self-start rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:self-stretch"
                     >
                       Copy
                     </motion.button>
@@ -1439,7 +1310,7 @@ export function RadioPlayer() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setShowShareModal(false)}
-                className="w-full rounded-lg border border-white/10 bg-white/10 px-4 py-2 font-medium text-foreground shadow-sm backdrop-blur-xl transition-colors hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="w-full rounded-lg border border-border bg-secondary px-4 py-2 font-medium text-secondary-foreground shadow-sm transition-colors hover:bg-secondary/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 Close
               </motion.button>
