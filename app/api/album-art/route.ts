@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { upscaleItunesArtworkUrl } from "@/lib/stream-artwork"
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -23,11 +24,8 @@ export async function GET(request: NextRequest) {
     const data = await response.json()
 
     if (data.results && data.results.length > 0) {
-      // Get higher resolution artwork (replace 100x100 with 600x600)
-      const artworkUrl = data.results[0].artworkUrl100?.replace(
-        "100x100bb",
-        "600x600bb"
-      )
+      const raw = data.results[0].artworkUrl100
+      const artworkUrl = raw ? upscaleItunesArtworkUrl(raw) : null
       return NextResponse.json({
         artworkUrl,
         artistName: data.results[0].artistName,

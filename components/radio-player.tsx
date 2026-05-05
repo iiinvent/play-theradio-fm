@@ -1,20 +1,18 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react"
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react"
+import type { CSSProperties } from "react"
+import { createPortal } from "react-dom"
 import Image from "next/image"
 import {
   Play,
   Pause,
-  Radio,
-  Sun,
-  Moon,
+  Sparkles,
+  Palette,
   Wifi,
-  Music2,
-  Disc3,
   Mic,
   ChevronDown,
   Timer,
-  Droplets,
   Settings2,
   X,
   Activity,
@@ -50,7 +48,8 @@ interface StreamMetadata {
 type LavaIntensity = "off" | "subtle" | "medium" | "high" | "reactive"
 
 const STREAM_URL = "https://servidor36-2.brlogic.com:7064/live"
-const STATION_LOGO_URL = "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/theradio-fm-logo-riP2RHcCrwTnJDqhSbaT3uXluubSLi.jpg"
+/** Square brand asset: dark teal field, white ring, red disc — guides light/dark theme accents */
+const STATION_LOGO_URL = "/theradio-fm-logo.png"
 const DEFAULT_SHARE_IMAGE_URL = "/apple-icon.jpg"
 const SHARE_URL = "https://theradio.fm"
 
@@ -91,23 +90,52 @@ const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
 }
 
-// Lava Lamp Visualizer Component with intensity settings
+/** Fixed panel above the anchor — portaled to body so ancestors never reflow or grow. */
+function fixedMenuStyleAboveAnchor(
+  anchor: HTMLElement,
+  options?: { maxWidthPx?: number; gapPx?: number }
+): CSSProperties {
+  const gapPx = options?.gapPx ?? 8
+  const maxWidthPx = options?.maxWidthPx ?? 320
+  const vw = window.innerWidth
+  const margin = 16
+  const width = Math.min(maxWidthPx, vw - margin * 2)
+  const rect = anchor.getBoundingClientRect()
+  let left = rect.right - width
+  left = Math.max(margin, Math.min(left, vw - width - margin))
+  return {
+    position: "fixed",
+    left,
+    top: rect.top - gapPx,
+    width,
+    transform: "translateY(-100%)",
+    zIndex: 110,
+  }
+}
+
+type LavaColorMode = "teal" | "midnight"
+
+// Lava Lamp Visualizer — midnight mode: no teal, warmer/brighter blobs scaled by intensity
 function LavaLampVisualizer({ 
   analyzerData, 
   isPlaying, 
-  intensity 
+  intensity,
+  colorMode = "teal",
 }: { 
   analyzerData: number[]
   isPlaying: boolean
-  intensity: LavaIntensity 
+  intensity: LavaIntensity
+  colorMode?: LavaColorMode
 }) {
   // Calculate audio energy for reactive mode
   const avgEnergy = analyzerData.length > 0 
     ? analyzerData.reduce((a, b) => a + b, 0) / analyzerData.length / 255 
     : 0
 
-  // Intensity settings
-  const settings = {
+  const settingsTeal: Record<
+    LavaIntensity,
+    { blobCount: number; opacity: number; speed: number; movement: number; blur: string; saturation: number }
+  > = {
     off: { blobCount: 0, opacity: 0, speed: 1, movement: 0, blur: "blur-2xl", saturation: 0 },
     subtle: { blobCount: 5, opacity: 0.38, speed: 1.45, movement: 24, blur: "blur-2xl", saturation: 62 },
     medium: { blobCount: 8, opacity: 0.64, speed: 0.9, movement: 46, blur: "blur-xl", saturation: 78 },
@@ -115,7 +143,16 @@ function LavaLampVisualizer({
     reactive: { blobCount: 12, opacity: 0.9, speed: 0.45, movement: 88, blur: "blur-lg", saturation: 96 },
   }
 
-  const config = settings[intensity] || settings.medium
+  /* Brighter, higher-chroma lava on deep black; same relative steps (off → reactive) */
+  const settingsMidnight: typeof settingsTeal = {
+    off: { blobCount: 0, opacity: 0, speed: 1, movement: 0, blur: "blur-2xl", saturation: 0 },
+    subtle: { blobCount: 5, opacity: 0.5, speed: 1.45, movement: 24, blur: "blur-2xl", saturation: 76 },
+    medium: { blobCount: 8, opacity: 0.78, speed: 0.9, movement: 46, blur: "blur-xl", saturation: 88 },
+    high: { blobCount: 10, opacity: 0.93, speed: 0.62, movement: 72, blur: "blur-lg", saturation: 96 },
+    reactive: { blobCount: 12, opacity: 0.98, speed: 0.45, movement: 88, blur: "blur-lg", saturation: 100 },
+  }
+
+  const config = (colorMode === "midnight" ? settingsMidnight : settingsTeal)[intensity] || settingsTeal.medium
   const reactiveMultiplier = intensity === "reactive" ? (1 + avgEnergy * 2.2) : 1
 
   // Use deterministic pseudo-random values based on index to avoid hydration mismatch
@@ -124,16 +161,23 @@ function LavaLampVisualizer({
     return x - Math.floor(x)
   }
 
+  const blobHue = (i: number) => {
+    if (colorMode === "midnight") {
+      const warm = [4, 16, 330, 24, 350, 10, 340, 18, 8, 325, 28, 12]
+      return warm[i % warm.length] + (i * 4) % 9
+    }
+    return i % 2 === 0 ? 5 + (i * 5) % 20 : 175 + (i * 5) % 20
+  }
+
   const blobs = useMemo(() => 
     Array.from({ length: config.blobCount }, (_, i) => ({
       id: i,
       x: 4 + (i % 5) * 22 + seededRandom(i + 1) * 18,
       size: 130 + seededRandom(i + 10) * 120,
-      // Alternate between crimson red (0-20) and teal (170-190) from logo
-      hue: i % 2 === 0 ? 5 + (i * 5) % 20 : 175 + (i * 5) % 20,
+      hue: blobHue(i),
       speed: 7 + seededRandom(i + 20) * 7,
       delay: i * 0.28,
-    })), [config.blobCount]
+    })), [config.blobCount, colorMode]
   )
 
   if (intensity === "off") return null
@@ -188,17 +232,30 @@ function LavaLampVisualizer({
         )
       })}
       
-      {/* Overlay glow for depth */}
+      {/* Overlay glow — teal mode uses crimson + teal cast; midnight uses warm red + magenta only */}
       <motion.div 
         className="pointer-events-none absolute inset-0"
         style={{
-          background: `radial-gradient(ellipse at 50% 100%, 
-            hsla(10, 85%, 30%, ${config.opacity * 0.28}), 
-            hsla(178, 80%, 24%, ${config.opacity * 0.16}),
-            transparent 68%)`,
+          background:
+            colorMode === "midnight"
+              ? `radial-gradient(ellipse at 50% 100%, 
+                  hsla(12, 92%, 52%, ${config.opacity * 0.38}), 
+                  hsla(305, 62%, 48%, ${config.opacity * 0.24}),
+                  transparent 68%)`
+              : `radial-gradient(ellipse at 50% 100%, 
+                  hsla(10, 85%, 30%, ${config.opacity * 0.28}), 
+                  hsla(178, 80%, 24%, ${config.opacity * 0.16}),
+                  transparent 68%)`,
         }}
         animate={{
-          opacity: intensity === "reactive" ? [0.62, 0.95 + avgEnergy * 0.25, 0.62] : [0.58, 0.86, 0.58],
+          opacity:
+            colorMode === "midnight"
+              ? intensity === "reactive"
+                ? [0.72, 1 + avgEnergy * 0.28, 0.72]
+                : [0.68, 0.94, 0.68]
+              : intensity === "reactive"
+                ? [0.62, 0.95 + avgEnergy * 0.25, 0.62]
+                : [0.58, 0.86, 0.58],
         }}
         transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
       />
@@ -230,8 +287,15 @@ export function RadioPlayer() {
   const [isStreamInfoExpanded, setIsStreamInfoExpanded] = useState(false)
   const [showSleepTimer, setShowSleepTimer] = useState(false)
   const [sleepTimerSeconds, setSleepTimerSeconds] = useState<number | null>(null)
+  /** Preset minutes for the running timer — used to highlight the active option (remaining seconds alone is ambiguous). */
+  const [sleepTimerPresetMinutes, setSleepTimerPresetMinutes] = useState<number | null>(null)
   const [sleepTimerActive, setSleepTimerActive] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
+
+  const lavaSettingsBtnRef = useRef<HTMLButtonElement>(null)
+  const sleepTimerBtnRef = useRef<HTMLButtonElement>(null)
+  const [lavaMenuStyle, setLavaMenuStyle] = useState<CSSProperties>({})
+  const [sleepMenuStyle, setSleepMenuStyle] = useState<CSSProperties>({})
 
   // Initialize audio analyzer
   const initializeAudioAnalyzer = useCallback(() => {
@@ -291,6 +355,31 @@ export function RadioPlayer() {
     setMounted(true)
   }, [])
 
+  // Portaled menus: keep position synced (opening panels must not affect header layout)
+  useLayoutEffect(() => {
+    if (!mounted) return
+    const sync = () => {
+      if (showVisualizerMenu && lavaSettingsBtnRef.current) {
+        setLavaMenuStyle(fixedMenuStyleAboveAnchor(lavaSettingsBtnRef.current, { maxWidthPx: 320 }))
+      } else {
+        setLavaMenuStyle({})
+      }
+      if (showSleepTimer && sleepTimerBtnRef.current) {
+        setSleepMenuStyle(fixedMenuStyleAboveAnchor(sleepTimerBtnRef.current, { maxWidthPx: 288 }))
+      } else {
+        setSleepMenuStyle({})
+      }
+    }
+    sync()
+    if (!showVisualizerMenu && !showSleepTimer) return
+    window.addEventListener("resize", sync, { passive: true })
+    window.addEventListener("scroll", sync, true)
+    return () => {
+      window.removeEventListener("resize", sync)
+      window.removeEventListener("scroll", sync, true)
+    }
+  }, [mounted, showVisualizerMenu, showSleepTimer])
+
   // Keyboard navigation for menus
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -306,8 +395,11 @@ export function RadioPlayer() {
 
   
 
+  const lavaColorMode: LavaColorMode =
+    mounted && resolvedTheme === "oled" ? "midnight" : "teal"
+
   const toggleTheme = () => {
-    setTheme(resolvedTheme === "dark" ? "light" : "dark")
+    setTheme(resolvedTheme === "dark" ? "oled" : "dark")
   }
 
   // Sleep timer countdown
@@ -322,6 +414,7 @@ export function RadioPlayer() {
             setIsPlaying(false)
           }
           setSleepTimerActive(false)
+          setSleepTimerPresetMinutes(null)
           return null
         }
         return prev - 1
@@ -333,12 +426,14 @@ export function RadioPlayer() {
 
   const startSleepTimer = (minutes: number) => {
     setSleepTimerSeconds(minutes * 60)
+    setSleepTimerPresetMinutes(minutes)
     setSleepTimerActive(true)
     setShowSleepTimer(false)
   }
 
   const cancelSleepTimer = () => {
     setSleepTimerSeconds(null)
+    setSleepTimerPresetMinutes(null)
     setSleepTimerActive(false)
   }
 
@@ -563,7 +658,8 @@ export function RadioPlayer() {
       <LavaLampVisualizer 
         analyzerData={analyzerData} 
         isPlaying={isPlaying} 
-        intensity={lavaIntensity} 
+        intensity={lavaIntensity}
+        colorMode={lavaColorMode}
       />
     )
   }
@@ -606,37 +702,37 @@ export function RadioPlayer() {
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="liquid-glass relative z-10 m-4 flex items-center justify-between rounded-3xl p-3 md:m-6 md:p-4"
+        className="app-header relative z-50 m-3 flex min-h-0 items-center justify-between overflow-hidden rounded-2xl p-2.5 md:m-5 md:rounded-3xl md:p-3"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2 md:gap-2.5">
           <motion.div
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="liquid-glass-sm relative h-12 w-12 overflow-hidden rounded-full"
+            className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-1 ring-white/30 md:h-11 md:w-11"
           >
             <Image
               src={STATION_LOGO_URL}
               alt={metadata?.name || "Station logo"}
-              width={48}
-              height={48}
+              width={44}
+              height={44}
               className="h-full w-full object-cover object-center"
             />
           </motion.div>
-          <div>
-            <h1 className="text-lg font-bold text-foreground">
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-bold leading-tight text-white md:text-lg">
               {metadata?.name || "theradio.fm"}
             </h1>
-            <div className="flex items-center gap-2" role="status" aria-live="polite">
+            <div className="flex items-center gap-1.5" role="status" aria-live="polite">
               <motion.span
                 animate={{
                   scale: isConnected ? [1, 1.2, 1] : 1,
                   opacity: isConnected ? [1, 0.7, 1] : 0.5,
                 }}
                 transition={{ duration: 2, repeat: Infinity }}
-                className={`h-2 w-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}
+                className={`h-2 w-2 rounded-full ${isConnected ? "bg-emerald-400" : "bg-red-400"}`}
                 aria-hidden="true"
               />
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[11px] text-white/75 md:text-xs">
                 {isConnected ? "Live" : "Offline"}
               </span>
               <span className="sr-only">
@@ -646,28 +742,28 @@ export function RadioPlayer() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 md:gap-2">
-          {/* Visualizer Selector */}
-          <div className="relative">
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowVisualizerMenu(!showVisualizerMenu)
-                setShowSleepTimer(false)
-              }}
-              className={`liquid-glass-sm rounded-full p-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${lavaIntensity !== "off" ? "text-primary ring-1 ring-primary/30" : "hover:bg-white/10"}`}
-              aria-label={`Visual effects settings. Current: ${lavaIntensity}`}
-              aria-expanded={showVisualizerMenu}
-              aria-haspopup="menu"
-            >
-              <Settings2 className="h-5 w-5" aria-hidden="true" />
-            </motion.button>
-          </div>
-
-          {/* Sleep Timer Button */}
+        <div className="flex min-h-0 shrink-0 items-center gap-0.5 md:gap-1.5">
           <motion.button
+            ref={lavaSettingsBtnRef}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowVisualizerMenu(!showVisualizerMenu)
+              setShowSleepTimer(false)
+            }}
+            className={`app-header__btn rounded-full p-2 md:p-2.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+              lavaIntensity !== "off" ? "app-header__btn--active" : ""
+            }`}
+            aria-label={`Visual effects settings. Current: ${lavaIntensity}`}
+            aria-expanded={showVisualizerMenu}
+            aria-haspopup="menu"
+          >
+            <Settings2 className="h-[18px] w-[18px] text-white md:h-5 md:w-5" aria-hidden="true" />
+          </motion.button>
+
+          <motion.button
+            ref={sleepTimerBtnRef}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={(e) => {
@@ -679,95 +775,192 @@ export function RadioPlayer() {
                 setShowVisualizerMenu(false)
               }
             }}
-            className={`liquid-glass-sm rounded-full p-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${sleepTimerActive ? "text-primary ring-1 ring-primary/30" : "hover:bg-white/10"}`}
-            aria-label={sleepTimerActive ? `Sleep timer active. ${sleepTimerSeconds ? formatTime(sleepTimerSeconds) : ''} remaining. Click to cancel.` : "Set sleep timer"}
+            className={`app-header__btn rounded-full p-2 md:p-2.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+              sleepTimerActive ? "app-header__btn--active" : ""
+            }`}
+            aria-label={
+              sleepTimerActive
+                ? `Sleep timer active. ${sleepTimerSeconds != null ? formatTime(sleepTimerSeconds) : ""} remaining. Click to cancel.`
+                : "Set sleep timer"
+            }
             aria-expanded={showSleepTimer}
             aria-haspopup="menu"
           >
-            <Timer className="h-5 w-5" aria-hidden="true" />
+            <Timer className="h-[18px] w-[18px] text-white md:h-5 md:w-5" aria-hidden="true" />
           </motion.button>
 
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={toggleTheme}
-            className="liquid-glass-sm rounded-full p-3 transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            aria-label={mounted && resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="app-header__btn rounded-full p-2 md:p-2.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            aria-label={
+              mounted && resolvedTheme === "oled"
+                ? "Switch to station teal theme"
+                : "Switch to midnight black theme"
+            }
           >
-            {mounted && resolvedTheme === "dark" ? (
-              <Sun className="h-5 w-5 text-foreground" aria-hidden="true" />
+            {mounted && resolvedTheme === "oled" ? (
+              <Palette className="h-[18px] w-[18px] text-white md:h-5 md:w-5" aria-hidden="true" />
             ) : (
-              <Moon className="h-5 w-5 text-foreground" aria-hidden="true" />
+              <Sparkles className="h-[18px] w-[18px] text-white md:h-5 md:w-5" aria-hidden="true" />
             )}
           </motion.button>
         </div>
       </motion.header>
 
-      {/* Sleep Timer Dropdown */}
-      <AnimatePresence>
-        {showSleepTimer && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[998]"
-              onClick={() => setShowSleepTimer(false)}
-              aria-hidden="true"
-            />
-            <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              className="liquid-glass fixed right-4 top-20 z-[999] w-56 rounded-xl p-2 md:right-6"
-              role="menu"
-              aria-label="Sleep timer options"
-            >
-              <h3 className="mb-2 px-2 text-xs font-semibold uppercase text-muted-foreground" id="sleep-timer-heading">
-                Sleep Timer
-              </h3>
-              <div role="group" aria-labelledby="sleep-timer-heading">
-                {SLEEP_TIMER_OPTIONS.map((option, index) => {
-                  const isActive = sleepTimerActive && sleepTimerSeconds !== null && Math.ceil(sleepTimerSeconds / 60) === option.value
-                  return (
-                    <button
-                      key={option.value}
-                      onClick={() => startSleepTimer(option.value)}
-                      className={`flex w-full items-center justify-between rounded-lg px-3 py-3 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-95 touch-manipulation ${
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-foreground hover:bg-white/10"
-                      }`}
-                      role="menuitemradio"
-                      aria-checked={isActive}
-                      tabIndex={index === 0 ? 0 : -1}
-                    >
-                      <span className="font-medium">{option.label}</span>
-                      {isActive && sleepTimerSeconds !== null && (
-                        <span className="font-mono text-xs text-primary-foreground/80">
-                          {formatTime(sleepTimerSeconds)}
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-                {sleepTimerActive && (
-                  <button
-                    onClick={() => {
-                      cancelSleepTimer()
-                      setShowSleepTimer(false)
-                    }}
-                    className="mt-1 flex w-full items-center justify-center rounded-lg px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive active:scale-95 touch-manipulation"
-                    role="menuitem"
+      {mounted &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showVisualizerMenu && (
+              <>
+                <motion.div
+                  key="lava-backdrop"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[100]"
+                  onClick={() => setShowVisualizerMenu(false)}
+                  aria-hidden="true"
+                />
+                <motion.div
+                  key="lava-panel"
+                  style={lavaMenuStyle}
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  className="liquid-glass liquid-glass--menu max-w-[min(calc(100vw-2rem),20rem)] min-w-[16rem] rounded-xl p-2 shadow-xl"
+                  role="menu"
+                  aria-label="Visual effects intensity options"
+                >
+                  <h3
+                    className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    id="visualizer-heading"
                   >
-                    Cancel timer
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          </>
+                    Lava lamp
+                  </h3>
+                  <div
+                    role="group"
+                    aria-labelledby="visualizer-heading"
+                    className="max-h-[min(70vh,22rem)] overflow-y-auto overflow-x-hidden overscroll-contain pr-0.5"
+                  >
+                    {LAVA_INTENSITY_OPTIONS.map((option, index) => (
+                      <button
+                        key={option.type}
+                        type="button"
+                        onClick={() => {
+                          setLavaIntensity(option.type)
+                          setShowVisualizerMenu(false)
+                        }}
+                        className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98] touch-manipulation ${
+                          lavaIntensity === option.type
+                            ? "bg-primary text-primary-foreground"
+                            : "text-foreground hover:bg-white/10"
+                        }`}
+                        role="menuitemradio"
+                        aria-checked={lavaIntensity === option.type}
+                        tabIndex={index === 0 ? 0 : -1}
+                      >
+                        <span className="font-medium leading-tight">{option.label}</span>
+                        <span
+                          className={`text-xs leading-snug ${
+                            lavaIntensity === option.type
+                              ? "text-primary-foreground/75"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {option.description}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
         )}
-      </AnimatePresence>
+
+      {mounted &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showSleepTimer && (
+              <>
+                <motion.div
+                  key="sleep-backdrop"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[100]"
+                  onClick={() => setShowSleepTimer(false)}
+                  aria-hidden="true"
+                />
+                <motion.div
+                  key="sleep-panel"
+                  style={sleepMenuStyle}
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  className="liquid-glass liquid-glass--menu max-w-[min(calc(100vw-2rem),18rem)] min-w-[16rem] rounded-xl p-2 shadow-xl"
+                  role="menu"
+                  aria-label="Sleep timer options"
+                >
+                  <h3
+                    className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    id="sleep-timer-heading"
+                  >
+                    Sleep timer
+                  </h3>
+                  <div role="group" aria-labelledby="sleep-timer-heading">
+                    {SLEEP_TIMER_OPTIONS.map((option, index) => {
+                      const isActive = sleepTimerActive && sleepTimerPresetMinutes === option.value
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => startSleepTimer(option.value)}
+                          className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98] touch-manipulation ${
+                            isActive
+                              ? "bg-primary text-primary-foreground"
+                              : "text-foreground hover:bg-white/10"
+                          }`}
+                          role="menuitemradio"
+                          aria-checked={isActive}
+                          tabIndex={index === 0 ? 0 : -1}
+                        >
+                          <span className="font-medium leading-tight">{option.label}</span>
+                          {isActive && sleepTimerSeconds !== null && (
+                            <span className="shrink-0 font-mono text-xs tabular-nums text-primary-foreground/85">
+                              {formatTime(sleepTimerSeconds)}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                    {sleepTimerActive && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          cancelSleepTimer()
+                          setShowSleepTimer(false)
+                        }}
+                        className="mt-1 flex w-full items-center justify-center rounded-lg px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive active:scale-[0.98] touch-manipulation"
+                        role="menuitem"
+                      >
+                        Cancel timer
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
       {/* Active Sleep Timer Display */}
       <AnimatePresence>
@@ -776,10 +969,10 @@ export function RadioPlayer() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="liquid-glass-sm fixed left-1/2 top-20 z-[90] flex -translate-x-1/2 items-center gap-3 rounded-full px-4 py-2"
+            className="liquid-glass-sm fixed left-1/2 top-20 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-full px-3.5 py-2 md:gap-3 md:px-5 md:py-2.5"
           >
-            <Timer className="h-4 w-4 text-primary" />
-            <span className="font-mono text-lg font-bold text-foreground">
+            <Timer className="h-3.5 w-3.5 shrink-0 text-primary md:h-4 md:w-4" aria-hidden="true" />
+            <span className="font-mono text-base font-semibold tabular-nums tracking-tight text-foreground md:text-lg">
               {formatTime(sleepTimerSeconds)}
             </span>
             <motion.button
@@ -796,13 +989,13 @@ export function RadioPlayer() {
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="relative z-10 flex flex-col items-center justify-center px-4 pb-32 pt-8 md:pt-16">
+      <main className="relative z-10 flex flex-col items-center justify-center px-3 pb-28 pt-5 md:px-4 md:pb-32 md:pt-12">
         {/* Album Art */}
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.6, type: "spring" }}
-          className="relative mb-8 aspect-square w-full max-w-[320px] rounded-2xl md:max-w-[400px]"
+          className="relative mb-5 aspect-square w-full max-w-[280px] rounded-xl md:mb-7 md:max-w-[360px] md:rounded-2xl lg:max-w-[400px]"
         >
           <motion.div
             aria-hidden="true"
@@ -827,66 +1020,70 @@ export function RadioPlayer() {
             className="absolute inset-0 rounded-2xl"
           />
           <div className="liquid-glass relative h-full w-full overflow-hidden rounded-2xl">
-            <AnimatePresence mode="wait">
-              {albumArtUrl ? (
-                <motion.img
-                  key={albumArtUrl}
-                  initial={{ opacity: 0, scale: 1.1 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ duration: 0.5 }}
-                  src={albumArtUrl}
-                  alt="Album artwork"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-secondary to-muted"
-                >
+            {/* Art fills the frame; .liquid-glass > * sets position:relative — keep media in this block only */}
+            <div className="relative z-0 h-full min-h-0 w-full">
+              <AnimatePresence mode="wait">
+                {albumArtUrl ? (
+                  <motion.img
+                    key={albumArtUrl}
+                    initial={{ opacity: 0, scale: 1.1 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.5 }}
+                    src={albumArtUrl}
+                    alt="Album artwork"
+                    className="block h-full w-full object-cover"
+                  />
+                ) : (
                   <motion.div
-                    animate={{ rotate: isPlaying ? 360 : 0 }}
-                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="relative h-full min-h-0 w-full bg-background"
                   >
-                    <Disc3 className="h-32 w-32 text-muted-foreground" />
+                    <Image
+                      src={STATION_LOGO_URL}
+                      alt="theradio.fm station artwork"
+                      fill
+                      className="object-cover object-center"
+                      sizes="(max-width: 768px) 320px, 400px"
+                      priority
+                    />
                   </motion.div>
-                  <Music2 className="mt-4 h-8 w-8 text-muted-foreground/50" />
-                </motion.div>
-              )}
-            </AnimatePresence>
+                )}
+              </AnimatePresence>
+            </div>
 
             {isPlaying && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="absolute inset-0 bg-gradient-to-t from-background/36 via-transparent to-black/10"
+                className="pointer-events-none !absolute inset-0 z-[3] bg-gradient-to-t from-background/36 via-transparent to-black/10"
               />
             )}
 
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-4 md:p-5">
+            {/* Must use !absolute: globals .liquid-glass > * { position:relative } wins over .absolute */}
+            <div className="pointer-events-none !absolute inset-0 z-[25]">
               <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.94 }}
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  console.log("[v0] Share button onClick triggered")
                   handleShare()
                 }}
-                className="liquid-glass-sm flex h-12 w-12 items-center justify-center rounded-full text-foreground transition-all hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation md:h-14 md:w-14"
+                className="pointer-events-auto !absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-black/35 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-black/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent active:scale-90 touch-manipulation md:right-4 md:top-4 md:h-12 md:w-12"
                 aria-label={`Share current track: ${trackInfo.title} by ${trackInfo.artist}`}
                 type="button"
               >
-                <Share2 className="h-5 w-5 md:h-6 md:w-6" aria-hidden="true" />
+                <Share2 className="h-5 w-5 md:h-5 md:w-5" aria-hidden="true" />
               </motion.button>
 
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
                 onClick={togglePlay}
                 disabled={isLoading}
-                className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-primary/85 shadow-2xl shadow-black/30 backdrop-blur-2xl transition-all disabled:opacity-50 md:h-20 md:w-20 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-90 touch-manipulation"
+                className="pointer-events-auto !absolute bottom-4 left-1/2 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full border border-white/45 bg-white/22 text-white shadow-2xl shadow-black/35 backdrop-blur-xl transition-all hover:bg-white/30 disabled:opacity-50 md:bottom-5 md:h-[4.75rem] md:w-[4.75rem] focus:outline-none focus-visible:ring-4 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent active:scale-90 touch-manipulation"
                 aria-label={isLoading ? "Loading stream" : isPlaying ? "Pause playback" : "Play stream"}
                 aria-busy={isLoading}
               >
@@ -898,7 +1095,7 @@ export function RadioPlayer() {
                       animate={{ opacity: 1, rotate: 360 }}
                       exit={{ opacity: 0 }}
                       transition={{ rotate: { duration: 1, repeat: Infinity, ease: "linear" } }}
-                      className="h-7 w-7 rounded-full border-4 border-primary-foreground border-t-transparent md:h-8 md:w-8"
+                      className="h-7 w-7 rounded-full border-[3px] border-white border-t-transparent md:h-8 md:w-8"
                     />
                   ) : isPlaying ? (
                     <motion.div
@@ -907,7 +1104,7 @@ export function RadioPlayer() {
                       animate={{ scale: 1 }}
                       exit={{ scale: 0 }}
                     >
-                      <Pause className="h-7 w-7 text-primary-foreground md:h-9 md:w-9" />
+                      <Pause className="h-7 w-7 md:h-9 md:w-9" strokeWidth={2.25} />
                     </motion.div>
                   ) : (
                     <motion.div
@@ -916,7 +1113,7 @@ export function RadioPlayer() {
                       animate={{ scale: 1 }}
                       exit={{ scale: 0 }}
                     >
-                      <Play className="ml-1 h-7 w-7 text-primary-foreground md:h-9 md:w-9" />
+                      <Play className="ml-1 h-7 w-7 md:h-9 md:w-9" strokeWidth={2.25} />
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -930,33 +1127,35 @@ export function RadioPlayer() {
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="liquid-glass mb-8 w-full max-w-[400px] rounded-3xl p-5 text-center"
+          className="liquid-glass mb-4 w-full max-w-[400px] rounded-2xl px-4 py-4 text-center md:mb-5 md:rounded-3xl md:px-5 md:py-5"
           role="region"
           aria-label="Now playing"
           aria-live="polite"
         >
-          <AnimatePresence mode="wait">
-            <motion.h2
-              key={trackInfo.title}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mb-2 truncate text-2xl font-bold text-foreground md:text-3xl"
-            >
-              {trackInfo.title}
-            </motion.h2>
-          </AnimatePresence>
-          <AnimatePresence mode="wait">
-            <motion.p
-              key={trackInfo.artist}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="mb-1 truncate text-lg text-muted-foreground"
-            >
-              {trackInfo.artist}
-            </motion.p>
-          </AnimatePresence>
+          <div className="mx-auto flex max-w-[22rem] flex-col gap-1.5 md:max-w-none md:gap-2">
+            <AnimatePresence mode="wait">
+              <motion.h2
+                key={trackInfo.title}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="text-balance text-xl font-bold leading-snug tracking-tight text-foreground md:text-2xl md:leading-[1.15]"
+              >
+                {trackInfo.title}
+              </motion.h2>
+            </AnimatePresence>
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={trackInfo.artist}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-balance text-sm leading-relaxed text-muted-foreground md:text-base"
+              >
+                {trackInfo.artist}
+              </motion.p>
+            </AnimatePresence>
+          </div>
           <span className="sr-only">
             Now playing: {trackInfo.title} by {trackInfo.artist}
           </span>
@@ -969,33 +1168,34 @@ export function RadioPlayer() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="liquid-glass mb-4 w-full max-w-[400px] rounded-2xl p-4"
+              className="liquid-glass mb-3 w-full max-w-[400px] rounded-2xl px-4 py-3.5 md:mb-4 md:px-5 md:py-4"
             >
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col items-center text-center">
                 <motion.div
                   animate={{ scale: [1, 1.05, 1] }}
                   transition={{ duration: 2, repeat: Infinity }}
-                  className="flex h-16 w-16 items-center justify-center rounded-xl border border-white/10 bg-primary/15 shadow-inner backdrop-blur-xl"
+                  className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-primary/15 shadow-inner backdrop-blur-xl md:mb-2.5 md:h-12 md:w-12"
                 >
-                  <Mic className="h-8 w-8 text-primary" />
+                  <Mic className="h-6 w-6 text-primary md:h-7 md:w-7" />
                 </motion.div>
-                <div className="flex-1">
-                  <div className="mb-1 flex items-center gap-2">
-                    <motion.div
-                      animate={{ opacity: [1, 0.5, 1] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    >
-                      <Mic className="h-4 w-4 text-primary" />
-                    </motion.div>
-                    <span className="text-xs text-muted-foreground">On Air</span>
-                  </div>
-                  <h3 className="font-semibold text-card-foreground">
-                    {metadata.currentProgram.name}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {metadata.currentProgram.broadcaster}
-                  </p>
+                <div className="mb-1.5 flex items-center justify-center gap-1.5">
+                  <motion.div
+                    animate={{ opacity: [1, 0.5, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                    className="shrink-0"
+                  >
+                    <Mic className="h-3.5 w-3.5 text-primary md:h-4 md:w-4" />
+                  </motion.div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground md:text-[11px]">
+                    On Air
+                  </span>
                 </div>
+                <h3 className="text-pretty text-base font-semibold leading-snug text-card-foreground md:text-lg">
+                  {metadata.currentProgram.name}
+                </h3>
+                <p className="mt-1 text-pretty text-xs leading-relaxed text-muted-foreground md:text-sm">
+                  {metadata.currentProgram.broadcaster}
+                </p>
               </div>
             </motion.div>
           )}
@@ -1011,21 +1211,21 @@ export function RadioPlayer() {
           <motion.button
             whileTap={{ scale: 0.99 }}
             onClick={() => setIsStreamInfoExpanded(!isStreamInfoExpanded)}
-            className="flex w-full items-center justify-between p-4 md:p-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary touch-manipulation"
+            className="relative flex w-full items-center justify-center gap-2 px-4 py-3 md:gap-2.5 md:px-5 md:py-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary touch-manipulation"
             aria-expanded={isStreamInfoExpanded}
             aria-controls="stream-info-content"
           >
-            <div className="flex items-center gap-2">
-              <Wifi className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold text-card-foreground">
-                Stream Information
-              </h3>
-            </div>
+            <Wifi className="h-4 w-4 shrink-0 text-primary md:h-[18px] md:w-[18px]" aria-hidden="true" />
+            <h3 className="text-sm font-semibold leading-tight text-card-foreground md:text-base">
+              Stream Information
+            </h3>
             <motion.div
               animate={{ rotate: isStreamInfoExpanded ? 180 : 0 }}
               transition={{ duration: 0.3 }}
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 md:right-4"
+              aria-hidden="true"
             >
-              <ChevronDown className="h-5 w-5 text-muted-foreground" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground md:h-[18px] md:w-[18px]" />
             </motion.div>
           </motion.button>
 
@@ -1039,80 +1239,80 @@ export function RadioPlayer() {
                 transition={{ duration: 0.3 }}
                 className="overflow-hidden"
               >
-                <div className="space-y-3 px-4 pb-4 text-sm md:px-6 md:pb-6">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Station</span>
-                    <span className="font-medium text-card-foreground">
+                <dl className="space-y-0 border-t border-border/80 px-4 pb-4 pt-0.5 text-xs md:px-5 md:pb-4 md:text-sm">
+                  <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 first:pt-1.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
+                    <dt className="shrink-0 text-muted-foreground">Station</dt>
+                    <dd className="min-w-0 break-words font-medium leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
                       {metadata?.name || "Loading..."}
-                    </span>
+                    </dd>
                   </div>
 
                   {metadata?.genre && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Genre</span>
-                      <span className="font-medium text-card-foreground">
+                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
+                      <dt className="shrink-0 text-muted-foreground">Genre</dt>
+                      <dd className="min-w-0 break-words font-medium leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
                         {metadata.genre}
-                      </span>
+                      </dd>
                     </div>
                   )}
 
                   {metadata?.bitrate && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Bitrate</span>
-                      <span className="font-medium text-card-foreground">
+                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
+                      <dt className="shrink-0 text-muted-foreground">Bitrate</dt>
+                      <dd className="min-w-0 font-medium tabular-nums leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
                         {metadata.bitrate} kbps
-                      </span>
+                      </dd>
                     </div>
                   )}
 
                   {metadata?.contentType && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Format</span>
-                      <span className="font-medium text-card-foreground">
+                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
+                      <dt className="shrink-0 text-muted-foreground">Format</dt>
+                      <dd className="min-w-0 break-words font-medium leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
                         {metadata.contentType}
-                      </span>
+                      </dd>
                     </div>
                   )}
 
                   {metadata?.server && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Server</span>
-                      <span className="font-medium text-card-foreground">
+                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
+                      <dt className="shrink-0 text-muted-foreground">Server</dt>
+                      <dd className="min-w-0 break-all font-medium leading-snug text-card-foreground sm:max-w-[65%] sm:text-right">
                         {metadata.server}
-                      </span>
+                      </dd>
                     </div>
                   )}
 
                   {metadata?.metaInterval && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Meta Interval</span>
-                      <span className="font-medium text-card-foreground">
+                    <div className="flex flex-col gap-0.5 border-b border-border/60 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:py-2.5">
+                      <dt className="shrink-0 text-muted-foreground">Meta Interval</dt>
+                      <dd className="min-w-0 font-medium tabular-nums leading-snug text-card-foreground sm:max-w-[60%] sm:text-right">
                         {metadata.metaInterval} bytes
-                      </span>
+                      </dd>
                     </div>
                   )}
 
                   {metadata?.currentTrack && (
-                    <div className="border-t border-border pt-3">
-                      <span className="flex items-center gap-1.5 text-muted-foreground">
-                        <Activity className="h-4 w-4" />
-                        Now Playing
-                      </span>
-                      <p className="mt-1 font-medium text-card-foreground">
+                    <div className="border-b border-border/60 py-3">
+                      <dt className="flex items-center gap-1.5 text-muted-foreground">
+                        <Activity className="h-3.5 w-3.5 shrink-0 md:h-4 md:w-4" />
+                        <span>Now playing</span>
+                      </dt>
+                      <dd className="mt-1.5 text-pretty font-medium leading-snug text-card-foreground">
                         {metadata.currentTrack}
-                      </p>
+                      </dd>
                     </div>
                   )}
 
                   {metadata?.description && (
-                    <div className="border-t border-border pt-3">
-                      <span className="text-muted-foreground">Description</span>
-                      <p className="mt-1 text-card-foreground">
+                    <div className="mt-0.5 border-t border-border/80 pt-3">
+                      <dt className="text-muted-foreground">Description</dt>
+                      <dd className="mt-1.5 text-pretty leading-relaxed text-card-foreground">
                         {metadata.description}
-                      </p>
+                      </dd>
                     </div>
                   )}
-                </div>
+                </dl>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1135,58 +1335,6 @@ export function RadioPlayer() {
         </AnimatePresence>
       </div>
 
-      {/* Visualizer Menu - Rendered at root level with highest z-index */}
-      <AnimatePresence>
-        {showVisualizerMenu && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[998]"
-              onClick={() => setShowVisualizerMenu(false)}
-              aria-hidden="true"
-            />
-            <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              className="liquid-glass fixed right-4 top-20 z-[999] w-48 rounded-xl p-2 md:right-6"
-              role="menu"
-              aria-label="Visual effects intensity options"
-            >
-              <h3 className="mb-2 px-2 text-xs font-semibold uppercase text-muted-foreground" id="visualizer-heading">
-                Lava Lamp Intensity
-              </h3>
-              <div role="group" aria-labelledby="visualizer-heading">
-                {LAVA_INTENSITY_OPTIONS.map((option, index) => (
-                  <button
-                    key={option.type}
-                    onClick={() => {
-                      setLavaIntensity(option.type)
-                      setShowVisualizerMenu(false)
-                    }}
-                    className={`flex w-full flex-col items-start rounded-lg px-3 py-3 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-95 touch-manipulation ${
-                      lavaIntensity === option.type
-                        ? "bg-primary text-primary-foreground"
-                        : "text-foreground hover:bg-white/10"
-                    }`}
-                    role="menuitemradio"
-                    aria-checked={lavaIntensity === option.type}
-                    tabIndex={index === 0 ? 0 : -1}
-                  >
-                    <span className="font-medium">{option.label}</span>
-                    <span className={`text-xs ${lavaIntensity === option.type ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                      {option.description}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
       {/* Share Modal - Fallback for iframe embedding */}
       <AnimatePresence>
         {showShareModal && (
@@ -1203,16 +1351,19 @@ export function RadioPlayer() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="liquid-glass fixed left-1/2 top-1/2 z-[999] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6"
+              className="liquid-glass fixed left-1/2 top-1/2 z-[999] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6 md:p-7"
               role="dialog"
               aria-modal="true"
               aria-label="Share track"
             >
-              <div className="mb-4 flex items-start justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-foreground">Share Track</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {trackInfo.title} by {trackInfo.artist}
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div className="min-w-0 space-y-1.5 pr-2">
+                  <h2 className="text-balance text-xl font-bold leading-tight text-foreground">
+                    Share track
+                  </h2>
+                  <p className="text-pretty text-sm leading-relaxed text-muted-foreground">
+                    <span className="block font-medium text-foreground/90">{trackInfo.title}</span>
+                    <span className="text-muted-foreground"> by {trackInfo.artist}</span>
                   </p>
                 </div>
                 <motion.button
@@ -1226,17 +1377,17 @@ export function RadioPlayer() {
                 </motion.button>
               </div>
 
-              <div className="mb-4 space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-foreground">
+              <div className="mb-2 space-y-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium leading-none text-foreground">
                     Share URL
                   </label>
-                  <div className="mt-2 flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                     <input
                       type="text"
                       readOnly
                       value={buildRealtimeShareUrl()}
-                      className="flex-1 rounded-lg border border-white/10 bg-background/35 px-3 py-2 text-sm text-foreground shadow-inner backdrop-blur-xl"
+                      className="min-h-[42px] flex-1 rounded-lg border border-white/10 bg-background/35 px-3 py-2.5 text-sm leading-snug text-foreground shadow-inner backdrop-blur-xl"
                       aria-label="Share link"
                     />
                     <motion.button
@@ -1248,22 +1399,22 @@ export function RadioPlayer() {
                           navigator.clipboard.writeText(url)
                         }
                       }}
-                      className="rounded-lg border border-white/10 bg-primary/85 px-4 py-2 font-medium text-primary-foreground shadow-lg shadow-black/20 backdrop-blur-xl transition-colors hover:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="shrink-0 rounded-lg border border-white/10 bg-primary/85 px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 backdrop-blur-xl transition-colors hover:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       Copy URL
                     </motion.button>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-foreground">
-                    Share Message
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium leading-none text-foreground">
+                    Share message
                   </label>
-                  <div className="mt-2 flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                     <textarea
                       readOnly
                       value={`Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildRealtimeShareUrl()}`}
-                      className="flex-1 rounded-lg border border-white/10 bg-background/35 px-3 py-2 text-sm text-foreground shadow-inner backdrop-blur-xl"
+                      className="min-h-[5.5rem] flex-1 resize-none rounded-lg border border-white/10 bg-background/35 px-3 py-2.5 text-sm leading-relaxed text-foreground shadow-inner backdrop-blur-xl"
                       rows={3}
                       aria-label="Share message"
                     />
@@ -1276,7 +1427,7 @@ export function RadioPlayer() {
                           navigator.clipboard.writeText(message)
                         }
                       }}
-                      className="rounded-lg border border-white/10 bg-primary/85 px-4 py-2 font-medium text-primary-foreground shadow-lg shadow-black/20 backdrop-blur-xl transition-colors hover:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="shrink-0 self-start rounded-lg border border-white/10 bg-primary/85 px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 backdrop-blur-xl transition-colors hover:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:self-stretch"
                     >
                       Copy
                     </motion.button>

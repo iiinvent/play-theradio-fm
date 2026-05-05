@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server"
+import { resolveAlbumArtForTrack } from "@/lib/stream-artwork"
 
 const STREAM_URL = "https://servidor36-2.brlogic.com:7064/live"
 
 // BRLogic/WebRadioSite API endpoints (from the embed widget)
 const PLAYER_INFO_URL = "https://public-player-widget.webradiosite.com/app/player/info/253448?hash=563c560d12bc696e95ec8acf1afcd60a810016ab"
 const STATUS_URL = "https://d36nr0u3xmc4mm.cloudfront.net/index.php/api/streaming/status/7064/c5f885b75a1075c9fba1960e4cf86fe7/SV7BR"
-const SONG_COVER_URL = "https://brlogic-api.minhawebradio.net/api/streaming/song-cover"
-const COVER_BASE_URL = "https://public-rf-song-cover.minhawebradio.net/"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -44,11 +43,6 @@ interface StreamStatus {
   currentTrack?: string
 }
 
-interface SongCover {
-  success?: boolean
-  cover?: string
-}
-
 async function fetchPlayerInfo(): Promise<PlayerInfo | null> {
   try {
     const response = await fetch(PLAYER_INFO_URL, {
@@ -79,31 +73,6 @@ async function fetchRealtimeStreamStatus(): Promise<StreamStatus | null> {
     }
   } catch {
     // Fallback
-  }
-  return null
-}
-
-async function fetchRealtimeSongCover(currentTrack: string): Promise<string | null> {
-  if (!currentTrack) return null
-  
-  try {
-    const today = new Date().toISOString().split("T")[0]
-    const url = `${SONG_COVER_URL}?q=${encodeURIComponent(currentTrack)}&base-date=${today}&hash=d58c50320d789f14c139cae9bfadc9a430a9f6fa`
-    
-    const response = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(5000),
-      cache: "no-store",
-    })
-    
-    if (response.ok) {
-      const data: SongCover = await response.json()
-      if (data.success && data.cover) {
-        return `${COVER_BASE_URL}${data.cover}`
-      }
-    }
-  } catch {
-    // Fallback silently
   }
   return null
 }
@@ -142,9 +111,9 @@ export async function GET() {
     ])
 
     const currentTrack = streamStatus?.currentTrack || ""
-    
-    // Fetch song cover if we have a track name
-    const songCover = await fetchRealtimeSongCover(currentTrack)
+
+    /** BRLogic song-cover when present; else iTunes artwork at hi-res (mzstatic 3000×3000 cap). */
+    const albumArtResolved = await resolveAlbumArtForTrack(currentTrack)
     
     // Get current program from schedule
     const currentProgram = getCurrentProgram(playerInfo?.nextSchedules)
@@ -187,7 +156,7 @@ export async function GET() {
       
       // Current playback
       currentTrack,
-      albumArt: songCover,
+      albumArt: albumArtResolved,
       isLive: streamStatus?.streamingStatus === 1,
       
       // Current program

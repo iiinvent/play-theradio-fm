@@ -2,22 +2,16 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
+import { resolveAlbumArtForTrack } from '@/lib/stream-artwork'
 import './globals.css'
 
 const APP_URL = 'https://play.theradio.fm'
 const SHARE_URL = 'https://theradio.fm'
 const DEFAULT_SHARE_IMAGE_URL = `${APP_URL}/apple-icon.jpg`
 const STATUS_URL = 'https://d36nr0u3xmc4mm.cloudfront.net/index.php/api/streaming/status/7064/c5f885b75a1075c9fba1960e4cf86fe7/SV7BR'
-const SONG_COVER_URL = 'https://brlogic-api.minhawebradio.net/api/streaming/song-cover'
-const COVER_BASE_URL = 'https://public-rf-song-cover.minhawebradio.net/'
 
 interface StreamStatus {
   currentTrack?: string
-}
-
-interface SongCover {
-  success?: boolean
-  cover?: string
 }
 
 async function fetchRealtimeCurrentTrack(): Promise<string> {
@@ -31,25 +25,6 @@ async function fetchRealtimeCurrentTrack(): Promise<string> {
 
   const status: StreamStatus = await statusResponse.json()
   return status.currentTrack || ''
-}
-
-async function fetchRealtimeSongCover(currentTrack: string): Promise<string | null> {
-  if (!currentTrack) return null
-
-  const today = new Date().toISOString().split('T')[0]
-  const coverResponse = await fetch(
-    `${SONG_COVER_URL}?q=${encodeURIComponent(currentTrack)}&base-date=${today}&hash=d58c50320d789f14c139cae9bfadc9a430a9f6fa`,
-    {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(3000),
-    }
-  )
-
-  if (!coverResponse.ok) return null
-
-  const cover: SongCover = await coverResponse.json()
-  return cover.success && cover.cover ? `${COVER_BASE_URL}${cover.cover}` : null
 }
 
 const geistSans = Geist({ 
@@ -67,7 +42,7 @@ export const revalidate = 0
 async function getNowPlaying(): Promise<{ currentTrack: string; albumArt: string | null }> {
   try {
     const currentTrack = await fetchRealtimeCurrentTrack()
-    const albumArt = await fetchRealtimeSongCover(currentTrack)
+    const albumArt = await resolveAlbumArtForTrack(currentTrack, { timeoutMs: 3000 })
     return { currentTrack, albumArt }
   } catch {
     return { currentTrack: '', albumArt: null }
@@ -134,8 +109,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#1a4a4a' },
-    { media: '(prefers-color-scheme: dark)', color: '#0f2929' },
+    { media: '(prefers-color-scheme: light)', color: '#0a0a0a' },
+    { media: '(prefers-color-scheme: dark)', color: '#123030' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -153,8 +128,10 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="oled"
+          themes={['dark', 'oled']}
           enableSystem={false}
+          storageKey="theradio-player-theme"
           disableTransitionOnChange
         >
           {children}

@@ -3,79 +3,77 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root {
-  /* Light mode — warm teal tone matching the logo background in light key */
-  --background: oklch(0.88 0.045 180);
-  --foreground: oklch(0.20 0.06 180);
-  --card: oklch(0.92 0.04 180);
-  --card-foreground: oklch(0.20 0.06 180);
-  --popover: oklch(0.92 0.04 180);
-  --popover-foreground: oklch(0.20 0.06 180);
-  /* Crimson red primary — same as dark mode for consistency */
-  --primary: oklch(0.50 0.18 25);
-  --primary-foreground: oklch(0.98 0.005 180);
-  --secondary: oklch(0.82 0.05 180);
-  --secondary-foreground: oklch(0.20 0.06 180);
-  --muted: oklch(0.82 0.05 180);
-  --muted-foreground: oklch(0.40 0.05 180);
-  --accent: oklch(0.78 0.06 180);
-  --accent-foreground: oklch(0.20 0.06 180);
-  --destructive: oklch(0.50 0.18 25);
-  --destructive-foreground: oklch(0.98 0.005 180);
-  --border: oklch(0.75 0.055 180);
-  --input: oklch(0.80 0.05 180);
-  --ring: oklch(0.50 0.18 25);
-  --chart-1: oklch(0.50 0.18 25);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+/* Midnight OLED — no teal; deep neutral black (replaces former light theme slot). */
+:root:not(.dark) {
+  --background: oklch(0.07 0 0);
+  --foreground: oklch(0.96 0.006 0);
+  --card: oklch(0.11 0.004 0);
+  --card-foreground: oklch(0.96 0.006 0);
+  --popover: oklch(0.11 0.004 0);
+  --popover-foreground: oklch(0.96 0.006 0);
+  --primary: oklch(0.58 0.22 25);
+  --primary-foreground: oklch(0.99 0.01 0);
+  --secondary: oklch(0.16 0.006 0);
+  --secondary-foreground: oklch(0.94 0.01 0);
+  --muted: oklch(0.16 0.006 0);
+  --muted-foreground: oklch(0.62 0.02 0);
+  --accent: oklch(0.20 0.02 25);
+  --accent-foreground: oklch(0.96 0.01 0);
+  --destructive: oklch(0.58 0.22 25);
+  --destructive-foreground: oklch(0.99 0.01 0);
+  --border: oklch(0.24 0.01 0);
+  --input: oklch(0.22 0.01 0);
+  --ring: oklch(0.58 0.22 25);
+  --chart-1: oklch(0.58 0.22 25);
+  --chart-2: oklch(0.65 0.18 330);
+  --chart-3: oklch(0.72 0.16 15);
+  --chart-4: oklch(0.55 0.2 350);
+  --chart-5: oklch(0.60 0.18 28);
   --radius: 0.75rem;
-  --sidebar: oklch(0.88 0.045 180);
-  --sidebar-foreground: oklch(0.20 0.06 180);
-  --sidebar-primary: oklch(0.50 0.18 25);
-  --sidebar-primary-foreground: oklch(0.98 0.005 180);
-  --sidebar-accent: oklch(0.78 0.06 180);
-  --sidebar-accent-foreground: oklch(0.20 0.06 180);
-  --sidebar-border: oklch(0.75 0.055 180);
-  --sidebar-ring: oklch(0.50 0.18 25);
+  --sidebar: oklch(0.10 0.004 0);
+  --sidebar-foreground: oklch(0.96 0.006 0);
+  --sidebar-primary: oklch(0.58 0.22 25);
+  --sidebar-primary-foreground: oklch(0.99 0.01 0);
+  --sidebar-accent: oklch(0.22 0.03 25);
+  --sidebar-accent-foreground: oklch(0.96 0.01 0);
+  --sidebar-border: oklch(0.26 0.012 0);
+  --sidebar-ring: oklch(0.58 0.22 25);
 }
 
 .dark {
-  /* Deep teal background from theradio.fm logo */
-  --background: oklch(0.28 0.05 180);
-  --foreground: oklch(0.95 0.01 180);
-  --card: oklch(0.22 0.04 180);
-  --card-foreground: oklch(0.95 0.01 180);
-  --popover: oklch(0.22 0.04 180);
-  --popover-foreground: oklch(0.95 0.01 180);
-  /* Crimson red primary from logo */
-  --primary: oklch(0.50 0.18 25);
-  --primary-foreground: oklch(0.98 0.005 180);
-  --secondary: oklch(0.24 0.04 180);
-  --secondary-foreground: oklch(0.95 0.01 180);
-  --muted: oklch(0.24 0.04 180);
-  --muted-foreground: oklch(0.7 0.02 180);
-  --accent: oklch(0.30 0.05 180);
-  --accent-foreground: oklch(0.95 0.01 180);
-  --destructive: oklch(0.50 0.18 25);
-  --destructive-foreground: oklch(0.98 0.005 180);
-  --border: oklch(0.32 0.04 180);
-  --input: oklch(0.32 0.04 180);
-  --ring: oklch(0.50 0.18 25);
-  --chart-1: oklch(0.50 0.18 25);
+  /* Dark teal field ~ logo canvas #1a4d4d */
+  --background: oklch(0.32 0.055 195);
+  --foreground: oklch(0.97 0.012 195);
+  --card: oklch(0.26 0.048 198);
+  --card-foreground: oklch(0.97 0.012 195);
+  --popover: oklch(0.26 0.048 198);
+  --popover-foreground: oklch(0.97 0.012 195);
+  --primary: oklch(0.52 0.21 25);
+  --primary-foreground: oklch(0.99 0.01 195);
+  --secondary: oklch(0.28 0.045 198);
+  --secondary-foreground: oklch(0.97 0.012 195);
+  --muted: oklch(0.28 0.045 198);
+  --muted-foreground: oklch(0.72 0.028 195);
+  --accent: oklch(0.34 0.052 198);
+  --accent-foreground: oklch(0.97 0.012 195);
+  --destructive: oklch(0.52 0.21 25);
+  --destructive-foreground: oklch(0.99 0.01 195);
+  --border: oklch(0.36 0.045 198);
+  --input: oklch(0.36 0.045 198);
+  --ring: oklch(0.52 0.21 25);
+  --chart-1: oklch(0.52 0.21 25);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.22 0.04 180);
-  --sidebar-foreground: oklch(0.95 0.01 180);
-  --sidebar-primary: oklch(0.50 0.18 25);
-  --sidebar-primary-foreground: oklch(0.98 0.005 180);
-  --sidebar-accent: oklch(0.30 0.05 180);
-  --sidebar-accent-foreground: oklch(0.95 0.01 180);
-  --sidebar-border: oklch(0.32 0.04 180);
-  --sidebar-ring: oklch(0.50 0.18 25);
+  --sidebar: oklch(0.26 0.048 198);
+  --sidebar-foreground: oklch(0.97 0.012 195);
+  --sidebar-primary: oklch(0.52 0.21 25);
+  --sidebar-primary-foreground: oklch(0.99 0.01 195);
+  --sidebar-accent: oklch(0.34 0.052 198);
+  --sidebar-accent-foreground: oklch(0.97 0.012 195);
+  --sidebar-border: oklch(0.36 0.045 198);
+  --sidebar-ring: oklch(0.52 0.21 25);
 }
 
 @theme inline {
@@ -229,6 +227,27 @@
   z-index: 2;
 }
 
+/* Popovers/menus: opaque surface (not glass); overflow visible for inner scroll clipping */
+.liquid-glass.liquid-glass--menu {
+  overflow: visible;
+  background: var(--card);
+  border: 1px solid var(--border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    0 1px 0 color-mix(in oklab, white 14%, transparent) inset,
+    0 12px 40px -12px color-mix(in oklab, black 55%, transparent);
+}
+
+.liquid-glass.liquid-glass--menu::before {
+  opacity: 0.45;
+}
+
+.liquid-glass.liquid-glass--menu::after {
+  display: none;
+}
+
+
 @keyframes liquid-sheen {
   0%   { transform: translate3d(-6%, -4%, 0) rotate(0deg); }
   50%  { transform: translate3d(6%, 4%, 0) rotate(8deg); }
@@ -255,4 +274,60 @@
 
 @media (prefers-reduced-motion: reduce) {
   .liquid-glass::after { animation: none; }
+}
+
+/* Top bar — teal brand when .dark; neutral black when midnight (no teal) */
+.app-header {
+  position: relative;
+  isolation: isolate;
+  color: oklch(0.99 0 0);
+  background: linear-gradient(
+    145deg,
+    oklch(0.32 0.07 196) 0%,
+    oklch(0.26 0.06 202) 45%,
+    oklch(0.22 0.055 212) 100%
+  );
+  border: 1px solid color-mix(in oklab, white 15%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, white 14%, transparent) inset,
+    0 22px 55px -20px color-mix(in oklab, black 42%, transparent);
+}
+
+.dark .app-header {
+  background: linear-gradient(
+    145deg,
+    oklch(0.28 0.06 196) 0%,
+    oklch(0.22 0.055 205) 48%,
+    oklch(0.18 0.048 215) 100%
+  );
+  border: 1px solid color-mix(in oklab, white 10%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, white 10%, transparent) inset,
+    0 24px 60px -18px color-mix(in oklab, black 55%, transparent);
+}
+
+:root:not(.dark) .app-header {
+  background: linear-gradient(
+    145deg,
+    oklch(0.16 0.01 0) 0%,
+    oklch(0.11 0.008 0) 48%,
+    oklch(0.07 0 0) 100%
+  );
+  border: 1px solid color-mix(in oklab, white 12%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, white 8%, transparent) inset,
+    0 22px 50px -18px color-mix(in oklab, black 58%, transparent);
+}
+
+.app-header__btn {
+  color: oklch(0.99 0 0);
+}
+
+.app-header__btn:hover {
+  background: color-mix(in oklab, white 12%, transparent);
+}
+
+.app-header__btn--active {
+  background: color-mix(in oklab, white 16%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, white 35%, transparent);
 }
