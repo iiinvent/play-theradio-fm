@@ -45,6 +45,16 @@ interface StreamMetadata {
 type LavaIntensity = "off" | "subtle" | "medium" | "high" | "reactive"
 
 const STREAM_URL = "https://servidor36-2.brlogic.com:7064/live"
+
+/** Canonical absolute URL — compares safely to `HTMLMediaElement.src` (Firefox resolves aggressively). */
+function resolveStreamSrc(url: string): string {
+  if (typeof window === "undefined") return url
+  try {
+    return new URL(url, window.location.href).href
+  } catch {
+    return url
+  }
+}
 /** Square brand asset: dark teal field, white ring, red disc — guides light/dark theme accents */
 const STATION_LOGO_URL = "/theradio-fm-logo.png"
 const DEFAULT_SHARE_IMAGE_URL = "/apple-icon.jpg"
@@ -271,6 +281,8 @@ export function RadioPlayer() {
   
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  /** Firefox often fires `waiting` on live Icecast while the decoder catches up — distinct from initial tap load. */
+  const [streamBuffering, setStreamBuffering] = useState(false)
   const [metadata, setMetadata] = useState<StreamMetadata | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [lastTrack, setLastTrack] = useState<string>("")
@@ -298,7 +310,10 @@ export function RadioPlayer() {
     if (!audioRef.current || audioContextRef.current) return
 
     try {
-      const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const Ctor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const audioContext = new Ctor({ latencyHint: "playback" })
       const analyzer = audioContext.createAnalyser()
       analyzer.fftSize = 256
       analyzer.smoothingTimeConstant = 0.8
@@ -350,6 +365,35 @@ export function RadioPlayer() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Live stream stall / resume — Firefox surfaces `waiting` often; keep AudioContext in sync after tab focus.
+  useEffect(() => {
+    if (!mounted) return
+    const audio = audioRef.current
+    if (!audio) return
+
+    const onWaiting = () => setStreamBuffering(true)
+    const onCanPlay = () => setStreamBuffering(false)
+    const onPlaying = () => {
+      setStreamBuffering(false)
+      if (audioContextRef.current?.state === "suspended") {
+        void audioContextRef.current.resume().catch(() => {})
+      }
+    }
+    const onPause = () => setStreamBuffering(false)
+
+    audio.addEventListener("waiting", onWaiting)
+    audio.addEventListener("canplay", onCanPlay)
+    audio.addEventListener("playing", onPlaying)
+    audio.addEventListener("pause", onPause)
+
+    return () => {
+      audio.removeEventListener("waiting", onWaiting)
+      audio.removeEventListener("canplay", onCanPlay)
+      audio.removeEventListener("playing", onPlaying)
+      audio.removeEventListener("pause", onPause)
+    }
+  }, [mounted])
 
   // Portaled menus: keep position synced (opening panels must not affect header layout)
   useLayoutEffect(() => {
@@ -522,7 +566,7 @@ export function RadioPlayer() {
       setIsLoading(true)
       try {
         const audio = audioRef.current
-        const streamUrl = metadata?.streamUrl || STREAM_URL
+        const streamUrl = resolveStreamSrc(metadata?.streamUrl || STREAM_URL)
         if (audio.src !== streamUrl) {
           audio.pause()
           audio.src = streamUrl
@@ -735,10 +779,14 @@ export function RadioPlayer() {
                 aria-hidden="true"
               />
               <span className="text-[11px] text-white/75 md:text-xs">
-                {isConnected ? "Live" : "Offline"}
+                {!isConnected ? "Offline" : isPlaying && streamBuffering ? "Buffering" : "Live"}
               </span>
               <span className="sr-only">
-                {isConnected ? "Station is currently live and broadcasting" : "Station is currently offline"}
+                {!isConnected
+                  ? "Station is currently offline"
+                  : isPlaying && streamBuffering
+                    ? "Stream is buffering"
+                    : "Station is currently live and broadcasting"}
               </span>
             </div>
           </div>
@@ -1084,7 +1132,15 @@ export function RadioPlayer() {
                 onClick={togglePlay}
                 disabled={isLoading}
                 className="pointer-events-auto absolute bottom-4 left-1/2 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full border border-red-700/60 bg-red-600 text-white shadow-2xl shadow-red-950/45 transition-all hover:bg-red-700 disabled:opacity-50 md:bottom-5 md:h-[4.75rem] md:w-[4.75rem] focus:outline-none focus-visible:ring-4 focus-visible:ring-red-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent active:scale-90 touch-manipulation"
-                aria-label={isLoading ? "Loading stream" : isPlaying ? "Pause playback" : "Play stream"}
+                aria-label={
+                  isLoading
+                    ? "Loading stream"
+                    : isPlaying && streamBuffering
+                      ? "Stream buffering, pause playback"
+                      : isPlaying
+                        ? "Pause playback"
+                        : "Play stream"
+                }
                 aria-busy={isLoading}
               >
                 <AnimatePresence mode="wait">
@@ -1326,7 +1382,12 @@ export function RadioPlayer() {
       </AnimatePresence>
 
       {/* Audio Element */}
-      <audio ref={audioRef} preload="none" crossOrigin="anonymous" />
+      <audio
+        ref={audioRef}
+        preload="metadata"
+        crossOrigin="anonymous"
+        playsInline
+      />
     </div>
   )
 }
