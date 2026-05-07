@@ -521,24 +521,30 @@ export function RadioPlayer() {
     } else {
       setIsLoading(true)
       try {
-        // Initialize audio analyzer on first play
+        const audio = audioRef.current
+        const streamUrl = metadata?.streamUrl || STREAM_URL
+        if (audio.src !== streamUrl) {
+          audio.pause()
+          audio.src = streamUrl
+          audio.load()
+        }
+        audio.volume = 1
+
+        // Web Audio graph for the visualizer — must exist before play when using routing through AudioContext
         if (!audioContextRef.current) {
           initializeAudioAnalyzer()
         }
-        
-        // Resume audio context if suspended
-        if (audioContextRef.current?.state === "suspended") {
-          await audioContextRef.current.resume()
-        }
 
-        const streamUrl = metadata?.streamUrl || STREAM_URL
-        if (audioRef.current.src !== streamUrl) {
-          audioRef.current.pause()
-          audioRef.current.src = streamUrl
-          audioRef.current.load()
-        }
-        audioRef.current.volume = 1
-        await audioRef.current.play()
+        // Start play() and AudioContext.resume() in the same synchronous turn as the click.
+        // Firefox (notably in cross-origin iframes) rejects play() if any await ran earlier in the
+        // handler; transient user activation does not survive that yield. Awaiting only after both
+        // promises are created preserves audible output when routing through Web Audio.
+        const ctx = audioContextRef.current
+        const playPromise = audio.play()
+        const resumePromise =
+          ctx?.state === "suspended" ? ctx.resume() : Promise.resolve()
+
+        await Promise.all([playPromise, resumePromise])
         setIsPlaying(true)
       } catch (error) {
         console.error("Playback error:", error)
