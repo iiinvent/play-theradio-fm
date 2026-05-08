@@ -62,6 +62,48 @@ const SHARE_URL = "https://theradio.fm"
 
 const buildRealtimeShareUrl = () => `${SHARE_URL}?np=${Date.now()}`
 
+function isEmbeddedWindow(): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    return window.self !== window.top
+  } catch {
+    return true
+  }
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof window === "undefined" || typeof document === "undefined") return false
+
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Commonly blocked in iframes/sandbox; fall back below.
+    }
+  }
+
+  try {
+    const textarea = document.createElement("textarea")
+    textarea.value = text
+    textarea.setAttribute("readonly", "")
+    textarea.style.position = "fixed"
+    textarea.style.top = "0"
+    textarea.style.left = "0"
+    textarea.style.opacity = "0"
+    textarea.style.pointerEvents = "none"
+    document.body.appendChild(textarea)
+    textarea.focus()
+    textarea.select()
+    textarea.setSelectionRange(0, text.length)
+    const ok = document.execCommand("copy")
+    document.body.removeChild(textarea)
+    return ok
+  } catch {
+    return false
+  }
+}
+
 const SLEEP_TIMER_OPTIONS = [
   { label: "15 min", value: 15 },
   { label: "30 min", value: 30 },
@@ -612,7 +654,6 @@ export function RadioPlayer() {
 
   // Share functionality with current track metadata — iframe-compatible
   const handleShare = async () => {
-    console.log("[v0] Share button clicked")
     const shareTitle = `${trackInfo.title} - ${trackInfo.artist}`
     const shareText = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm`
     const shareUrl = buildRealtimeShareUrl()
@@ -623,9 +664,7 @@ export function RadioPlayer() {
       url: shareUrl,
     }
 
-    // Check if we're in an iframe
-    const isInIframe = typeof window !== "undefined" && window.self !== window.top
-    console.log("[v0] Is in iframe:", isInIframe)
+    const embedded = isEmbeddedWindow()
 
     // Try native Web Share API first (mobile & desktop)
     if (
@@ -634,68 +673,24 @@ export function RadioPlayer() {
       (!navigator.canShare || navigator.canShare(shareData))
     ) {
       try {
-        console.log("[v0] Attempting native share API")
         await navigator.share(shareData)
-        console.log("[v0] Native share succeeded")
         return
       } catch (err) {
         const errorName = (err as Error)?.name
-        console.log("[v0] Native share error:", errorName)
         // User cancelled, don't continue
         if (errorName === "AbortError") {
-          console.log("[v0] Share cancelled by user")
           return
         }
-        // Share API failed, continue to clipboard fallback
-      }
-    }
-
-    // Fallback 1: Copy to clipboard (works in iframes if allowed)
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      try {
-        console.log("[v0] Attempting clipboard copy")
-        await navigator.clipboard.writeText(shareMessage)
-        console.log("[v0] Clipboard copy succeeded")
-        return
-      } catch (err) {
-        console.log("[v0] Clipboard copy failed:", (err as Error).message)
-        // Clipboard access denied (common in iframes) — try alternative method
-      }
-    }
-
-    // Fallback 2: Use legacy execCommand for maximum compatibility
-    if (typeof window !== "undefined" && typeof document !== "undefined") {
-      try {
-        console.log("[v0] Attempting execCommand fallback")
-        // Create a temporary textarea element
-        const textarea = document.createElement("textarea")
-        textarea.value = shareMessage
-        textarea.style.position = "fixed"
-        textarea.style.top = "0"
-        textarea.style.left = "0"
-        textarea.style.opacity = "0"
-        textarea.style.pointerEvents = "none"
-        document.body.appendChild(textarea)
-        
-        // Select and copy
-        textarea.select()
-        textarea.setSelectionRange(0, 99999) // For mobile
-        
-        const success = document.execCommand("copy")
-        document.body.removeChild(textarea)
-        
-        if (success) {
-          console.log("[v0] execCommand copy succeeded")
+        // Share API often fails in embedded contexts (permissions policy / sandbox). Prefer modal there.
+        if (embedded) {
+          setShowShareModal(true)
           return
         }
-      } catch (err) {
-        console.log("[v0] execCommand failed:", (err as Error).message)
       }
     }
 
-    // Fallback 3: Show share modal dialog for iframe embedding
-    console.log("[v0] Showing share modal as final fallback")
-    setShowShareModal(true)
+    const copied = await copyTextToClipboard(shareMessage)
+    if (!copied) setShowShareModal(true)
   }
 
   // Render lava lamp visualizer
@@ -1320,6 +1315,8 @@ export function RadioPlayer() {
                       type="text"
                       readOnly
                       value={buildRealtimeShareUrl()}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
                       className="min-h-[42px] flex-1 rounded-lg border border-input bg-muted px-3 py-2.5 text-sm leading-snug text-foreground shadow-inner"
                       aria-label="Share link"
                     />
@@ -1328,15 +1325,21 @@ export function RadioPlayer() {
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
                         const url = buildRealtimeShareUrl()
-                        if (navigator.clipboard) {
-                          navigator.clipboard.writeText(url)
-                        }
+                        void copyTextToClipboard(url)
                       }}
                       className="shrink-0 rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       Copy URL
                     </motion.button>
                   </div>
+                  <a
+                    href={buildRealtimeShareUrl()}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex text-sm font-medium text-primary hover:underline"
+                  >
+                    Open link in a new tab
+                  </a>
                 </div>
 
                 <div className="space-y-2">
@@ -1347,6 +1350,8 @@ export function RadioPlayer() {
                     <textarea
                       readOnly
                       value={`Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildRealtimeShareUrl()}`}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}
                       className="min-h-[5.5rem] flex-1 resize-none rounded-lg border border-input bg-muted px-3 py-2.5 text-sm leading-relaxed text-foreground shadow-inner"
                       rows={3}
                       aria-label="Share message"
@@ -1356,9 +1361,7 @@ export function RadioPlayer() {
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
                         const message = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildRealtimeShareUrl()}`
-                        if (navigator.clipboard) {
-                          navigator.clipboard.writeText(message)
-                        }
+                        void copyTextToClipboard(message)
                       }}
                       className="shrink-0 self-start rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:self-stretch"
                     >
