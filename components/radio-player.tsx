@@ -665,6 +665,13 @@ export function RadioPlayer() {
     }
 
     const embedded = isEmbeddedWindow()
+    if (embedded) {
+      // In many embeds, Web Share + Clipboard are blocked by Permissions-Policy / sandbox.
+      // Always show a manual-share UI in that case.
+      setShowShareModal(true)
+      void copyTextToClipboard(shareMessage)
+      return
+    }
 
     // Try native Web Share API first (mobile & desktop)
     if (
@@ -679,11 +686,6 @@ export function RadioPlayer() {
         const errorName = (err as Error)?.name
         // User cancelled, don't continue
         if (errorName === "AbortError") {
-          return
-        }
-        // Share API often fails in embedded contexts (permissions policy / sandbox). Prefer modal there.
-        if (embedded) {
-          setShowShareModal(true)
           return
         }
       }
