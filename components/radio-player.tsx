@@ -55,9 +55,28 @@ function resolveStreamSrc(url: string): string {
     return url
   }
 }
+
+function buildFreshStreamSrc(url: string): string {
+  const resolvedUrl = resolveStreamSrc(url)
+  try {
+    const freshUrl = new URL(resolvedUrl)
+    freshUrl.searchParams.set("_fresh", Date.now().toString())
+    return freshUrl.href
+  } catch {
+    const separator = resolvedUrl.includes("?") ? "&" : "?"
+    return `${resolvedUrl}${separator}_fresh=${Date.now()}`
+  }
+}
+
+function stopAndUnloadStream(audio: HTMLAudioElement) {
+  audio.pause()
+  audio.removeAttribute("src")
+  audio.load()
+}
+
 /** Square brand asset: dark teal field, white ring, red disc — guides light/dark theme accents */
 const STATION_LOGO_URL = "/theradio-fm-logo.png"
-const DEFAULT_SHARE_IMAGE_URL = "/apple-icon.jpg"
+const DEFAULT_SHARE_IMAGE_URL = "/fallback.png"
 const SHARE_URL = "https://theradio.fm"
 
 const buildRealtimeShareUrl = () => `${SHARE_URL}?np=${Date.now()}`
@@ -563,7 +582,7 @@ export function RadioPlayer() {
       // Focus window when media control is clicked
       if (typeof window !== "undefined") window.focus()
       if (audioRef.current) {
-        audioRef.current.pause()
+        stopAndUnloadStream(audioRef.current)
         setIsPlaying(false)
       }
     })
@@ -602,18 +621,16 @@ export function RadioPlayer() {
     if (!audioRef.current) return
 
     if (isPlaying) {
-      audioRef.current.pause()
+      stopAndUnloadStream(audioRef.current)
       setIsPlaying(false)
     } else {
       setIsLoading(true)
       try {
         const audio = audioRef.current
-        const streamUrl = resolveStreamSrc(metadata?.streamUrl || STREAM_URL)
-        if (audio.src !== streamUrl) {
-          audio.pause()
-          audio.src = streamUrl
-          audio.load()
-        }
+        const streamUrl = buildFreshStreamSrc(metadata?.streamUrl || STREAM_URL)
+        audio.pause()
+        audio.src = streamUrl
+        audio.load()
         audio.volume = 1
 
         // Web Audio graph for the visualizer — must exist before play when using routing through AudioContext
