@@ -7,7 +7,7 @@ import './globals.css'
 
 const APP_URL = 'https://play.theradio.fm'
 const SHARE_URL = 'https://theradio.fm'
-const DEFAULT_SHARE_IMAGE_URL = `${APP_URL}/apple-icon.jpg`
+const DEFAULT_SHARE_IMAGE_URL = `${APP_URL}/fallback.png`
 const STATUS_URL = 'https://d36nr0u3xmc4mm.cloudfront.net/index.php/api/streaming/status/7064/c5f885b75a1075c9fba1960e4cf86fe7/SV7BR'
 
 interface StreamStatus {
