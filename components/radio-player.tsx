@@ -76,11 +76,8 @@ const STATION_LOGO_URL = "/theradio-fm-logo.png"
 const DEFAULT_SHARE_IMAGE_URL = "/fallback.png"
 const SHARE_URL = "https://theradio.fm"
 
-/**
- * Must stay unique vs podcasts / tubeflix / musiclove shell — OS Now Playing uses this to route
- * lock-screen taps to the correct installed PWA among several theradio.* surfaces.
- */
-const MEDIA_SESSION_APP_ID = "play.theradio.fm"
+/** Umbrella brand — every theradio Media Session uses this so OS controls map to theradio.fm. */
+const THERADIO_FM_MEDIA_HOME = "theradio.fm"
 
 /** Canonical listen URL — live radio only; no `np=` timestamp so shares stay clean. */
 const buildShareUrl = () => SHARE_URL
@@ -766,8 +763,8 @@ export function RadioPlayer() {
       title: track.title,
       artist: track.artist,
       album: metadata?.name
-        ? `${metadata.name} · ${MEDIA_SESSION_APP_ID}`
-        : MEDIA_SESSION_APP_ID,
+        ? `${metadata.name} · ${THERADIO_FM_MEDIA_HOME}`
+        : THERADIO_FM_MEDIA_HOME,
       artwork: absoluteArtSrc
         ? [
             { src: absoluteArtSrc, sizes: "512x512", type: "image/jpeg" },
@@ -806,7 +803,9 @@ export function RadioPlayer() {
       metadata?.currentTrack && nowTitle !== "Unknown Track"
         ? `${nowTitle} — ${artist}`
         : station
-    document.title = isPlaying ? `${trackLine} · ${MEDIA_SESSION_APP_ID}` : `${station} · ${MEDIA_SESSION_APP_ID}`
+    document.title = isPlaying
+      ? `${trackLine} · ${THERADIO_FM_MEDIA_HOME}`
+      : `${station} · ${THERADIO_FM_MEDIA_HOME}`
   }, [metadata, isPlaying])
 
   // Fetch stream metadata

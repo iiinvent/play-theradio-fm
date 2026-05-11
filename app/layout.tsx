@@ -70,7 +70,7 @@ export async function generateMetadata(): Promise<Metadata> {
     appleWebApp: {
       capable: true,
       statusBarStyle: 'black-translucent',
-      title: 'play.theradio.fm',
+      title: 'theradio.fm',
     },
     openGraph: {
       title,
