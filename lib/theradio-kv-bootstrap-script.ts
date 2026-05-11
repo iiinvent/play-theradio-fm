@@ -1,0 +1,5 @@
+/**
+ * Runs before React/next-themes hydrate so `theradio-player-theme` in the shared
+ * cookie bag is copied into localStorage (next-themes only reads localStorage).
+ */
+export const THERADIO_KV_BOOTSTRAP_SCRIPT = `(function(){var h=location.hostname;if(h!=="theradio.fm"&&!/\\.theradio\\.fm$/i.test(h))return;function parseBag(raw){try{var o=JSON.parse(raw);return typeof o==="object"&&o&&Object.assign({},o)||{}}catch(e){return{}}}function readChunks(){var m={},p=document.cookie.split(";");for(var i=0;i<p.length;i++){var q=p[i].indexOf("=");if(q<0)continue;var k=p[i].slice(0,q).trim(),v=p[i].slice(q+1).trim();try{m[k]=decodeURIComponent(v.replace(/\\+/g," "))}catch(_){m[k]=v}}var one=m.tr_kv_v1;if(one!==undefined)return one;var parts=[];for(var j=0;j<32;j++){var key="tr_kv_v1_"+j;if(!(key in m))break;parts.push(m[key])}return parts.length?parts.join(""):""}try{var s=readChunks();if(!s)return;var bag=parseBag(s);var KEY="theradio-player-theme";var v=bag[KEY];if(v!=null)try{localStorage.setItem(KEY,String(v))}catch(_){}}catch(_){}})();`
