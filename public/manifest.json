@@ -1,6 +1,6 @@
 {
-  "name": "theradio.fm - Live Internet Radio",
-  "short_name": "theradio.fm",
+  "name": "play.theradio.fm — Live Internet Radio",
+  "short_name": "play.radio",
   "description": "A modern fullscreen internet radio player with live streaming, real-time track info, and dynamic album artwork",
   "start_url": "/",
   "scope": "/",
