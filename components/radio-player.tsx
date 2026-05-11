@@ -346,6 +346,8 @@ export function RadioPlayer() {
   const isPlayingRef = useRef(false)
   /** Media Session `play` fires outside React — always invoke latest `startPlaybackFromUserGesture`. */
   const startPlaybackFromUserGestureRef = useRef<() => void>(() => {})
+  /** True while a soft `audio.play()` is in flight — keeps watchdog from full reload during that gap. */
+  const softResumePendingRef = useRef(false)
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -406,21 +408,21 @@ export function RadioPlayer() {
     isPlayingRef.current = isPlaying
   }, [isPlaying])
 
-  /** Clear decoded buffer then reconnect with `_fresh` — matches browser webradio `reloadAndPlay`. */
+  /**
+   * (Re)attach the live URL with a cache-bust query — **no** `src=""` blanking so pause/play stays a normal element resume.
+   */
   const reloadAndPlayLive = useCallback(
     (audio: HTMLAudioElement, rawBase: string) => {
       if (!rawBase) return
       interruptedRef.current = false
+      softResumePendingRef.current = false
       setIsLoading(true)
       if (!audioContextRef.current) {
         initializeAudioAnalyzer()
       }
       const ctx = audioContextRef.current
-      // Resume Web Audio first — required after autoplay suspend / pause (often stays suspended).
       void ctx?.resume()
 
-      audio.src = ""
-      audio.load()
       audio.src = buildFreshStreamSrc(rawBase)
       audio.load()
       audio.volume = 1
@@ -436,19 +438,42 @@ export function RadioPlayer() {
     [initializeAudioAnalyzer],
   )
 
+  /** Same-stack `audio.play()` + `AudioContext.resume()` — avoids resetting `<audio>` (keeps Media Session / decoder context). */
+  const resumePlaybackSoft = useCallback((audio: HTMLAudioElement) => {
+    initializeAudioAnalyzer()
+    const ctx = audioContextRef.current
+    softResumePendingRef.current = true
+    void ctx?.resume()
+    const playPromise = audio.play()
+    const resumePromise =
+      ctx?.state === "suspended" ? ctx.resume() : Promise.resolve()
+    return Promise.all([playPromise, resumePromise]).then(() => undefined)
+  }, [initializeAudioAnalyzer])
+
   /**
    * Start playback in the same synchronous turn as the user gesture (tap / lock-screen Play).
-   * If `reloadAndPlayLive` runs only inside `useEffect`, Chrome/Safari lose the gesture chain and
-   * `AudioContext.resume()` / `audio.play()` fail — the graph stays silent (“lost context”).
+   * If we already have a stream (`currentSrc`), **only** soft resume — never blank `src` on pause/play.
    */
   const startPlaybackFromUserGesture = useCallback(() => {
     const audio = audioRef.current
     if (!audio) return
-    initializeAudioAnalyzer()
-    void audioContextRef.current?.resume()
-    reloadAndPlayLive(audio, rawUrlRef.current)
+    const raw = rawUrlRef.current
+    if (!raw) return
+
     setIsPlaying(true)
-  }, [initializeAudioAnalyzer, reloadAndPlayLive])
+
+    const canSoftResume = audio.paused && !!audio.currentSrc
+
+    if (canSoftResume) {
+      void resumePlaybackSoft(audio).catch(() => {
+        softResumePendingRef.current = false
+        reloadAndPlayLive(audio, raw)
+      })
+      return
+    }
+
+    reloadAndPlayLive(audio, raw)
+  }, [reloadAndPlayLive, resumePlaybackSoft])
 
   startPlaybackFromUserGestureRef.current = startPlaybackFromUserGesture
 
@@ -474,14 +499,18 @@ export function RadioPlayer() {
         isPlayingRef.current &&
         !isLoading &&
         audio.paused &&
-        !userPausedRef.current
+        !userPausedRef.current &&
+        !softResumePendingRef.current
       ) {
-        console.info("[RadioPlayer] Watchdog: should be playing but paused — reloading")
-        reloadAndPlayLive(audio, rawUrlRef.current)
+        console.info("[RadioPlayer] Watchdog: should be playing but paused — soft resume then reconnect if needed")
+        void resumePlaybackSoft(audio).catch(() => {
+          softResumePendingRef.current = false
+          reloadAndPlayLive(audio, rawUrlRef.current)
+        })
       }
     }, WATCHDOG_MS)
     return () => clearInterval(id)
-  }, [mounted, isLoading, reloadAndPlayLive])
+  }, [mounted, isLoading, reloadAndPlayLive, resumePlaybackSoft])
 
   useEffect(() => {
     const tryResume = () => {
@@ -495,10 +524,13 @@ export function RadioPlayer() {
       window.setTimeout(() => {
         const a = audioRef.current
         if (!a || !isPlayingRef.current) return
-        console.info("[RadioPlayer] Resuming after interruption — reloading stream")
         interruptedRef.current = false
-        reloadAndPlayLive(a, rawUrlRef.current)
-      }, 500)
+        console.info("[RadioPlayer] Resuming after interruption — soft play first")
+        void resumePlaybackSoft(a).catch(() => {
+          softResumePendingRef.current = false
+          reloadAndPlayLive(a, rawUrlRef.current)
+        })
+      }, 250)
     }
 
     const onVisibility = () => {
@@ -511,7 +543,7 @@ export function RadioPlayer() {
       document.removeEventListener("visibilitychange", onVisibility)
       window.removeEventListener("focus", tryResume)
     }
-  }, [reloadAndPlayLive])
+  }, [reloadAndPlayLive, resumePlaybackSoft])
 
   // Tab visible again — wake suspended AudioContext (browser often suspends on hidden tab).
   useEffect(() => {
@@ -569,6 +601,7 @@ export function RadioPlayer() {
     const onWaiting = () => setStreamBuffering(true)
     const onCanPlay = () => setStreamBuffering(false)
     const onPlayingAudio = () => {
+      softResumePendingRef.current = false
       setStreamBuffering(false)
       setIsLoading(false)
       interruptedRef.current = false
