@@ -344,6 +344,8 @@ export function RadioPlayer() {
   /** OS interruption (call, Siri, lock-screen edge cases) — triggers reload on focus like browser. */
   const interruptedRef = useRef(false)
   const isPlayingRef = useRef(false)
+  /** Media Session `play` fires outside React — always invoke latest `startPlaybackFromUserGesture`. */
+  const startPlaybackFromUserGestureRef = useRef<() => void>(() => {})
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -410,15 +412,18 @@ export function RadioPlayer() {
       if (!rawBase) return
       interruptedRef.current = false
       setIsLoading(true)
+      if (!audioContextRef.current) {
+        initializeAudioAnalyzer()
+      }
+      const ctx = audioContextRef.current
+      // Resume Web Audio first — required after autoplay suspend / pause (often stays suspended).
+      void ctx?.resume()
+
       audio.src = ""
       audio.load()
       audio.src = buildFreshStreamSrc(rawBase)
       audio.load()
       audio.volume = 1
-      if (!audioContextRef.current) {
-        initializeAudioAnalyzer()
-      }
-      const ctx = audioContextRef.current
       const playPromise = audio.play()
       const resumePromise =
         ctx?.state === "suspended" ? ctx.resume() : Promise.resolve()
@@ -431,22 +436,34 @@ export function RadioPlayer() {
     [initializeAudioAnalyzer],
   )
 
-  // Drive `<audio>` from `isPlaying` — same model as browser `AudioGlobal` + Zustand `isPlaying` effect.
+  /**
+   * Start playback in the same synchronous turn as the user gesture (tap / lock-screen Play).
+   * If `reloadAndPlayLive` runs only inside `useEffect`, Chrome/Safari lose the gesture chain and
+   * `AudioContext.resume()` / `audio.play()` fail — the graph stays silent (“lost context”).
+   */
+  const startPlaybackFromUserGesture = useCallback(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    initializeAudioAnalyzer()
+    void audioContextRef.current?.resume()
+    reloadAndPlayLive(audio, rawUrlRef.current)
+    setIsPlaying(true)
+  }, [initializeAudioAnalyzer, reloadAndPlayLive])
+
+  startPlaybackFromUserGestureRef.current = startPlaybackFromUserGesture
+
+  // Pause-only sync — **never** call `play()` here (would run after the gesture expires).
   useEffect(() => {
     if (!mounted) return
     const audio = audioRef.current
     if (!audio) return
-    const raw = rawUrlRef.current
-    if (!raw) return
 
-    if (isPlaying && audio.paused) {
-      reloadAndPlayLive(audio, raw)
-    } else if (!isPlaying && !audio.paused) {
+    if (!isPlaying && !audio.paused) {
       userPausedRef.current = true
       audio.pause()
       userPausedRef.current = false
     }
-  }, [isPlaying, mounted, reloadAndPlayLive])
+  }, [isPlaying, mounted])
 
   useEffect(() => {
     if (!mounted) return
@@ -495,6 +512,17 @@ export function RadioPlayer() {
       window.removeEventListener("focus", tryResume)
     }
   }, [reloadAndPlayLive])
+
+  // Tab visible again — wake suspended AudioContext (browser often suspends on hidden tab).
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void audioContextRef.current?.resume()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => document.removeEventListener("visibilitychange", onVisibility)
+  }, [])
 
   // Update analyzer data on animation frame
   const updateAnalyzerData = useCallback(() => {
@@ -658,10 +686,14 @@ export function RadioPlayer() {
     return { artist: "Unknown Artist", title: track }
   }
 
-  /** Flip intent — actual `<audio>` work runs in the `isPlaying` sync effect (browser webradio pattern). */
+  /** Pause uses React state only; play runs `startPlaybackFromUserGesture` so Web Audio keeps user activation. */
   const togglePlay = useCallback(() => {
-    setIsPlaying((v) => !v)
-  }, [])
+    if (isPlaying) {
+      setIsPlaying(false)
+      return
+    }
+    startPlaybackFromUserGesture()
+  }, [isPlaying, startPlaybackFromUserGesture])
 
   // Media Session: OS controls call `setIsPlaying(true|false)` like Zustand `play`/`pause` in browser webradio.
   useEffect(() => {
@@ -670,7 +702,7 @@ export function RadioPlayer() {
 
     ms.setActionHandler("play", () => {
       if (typeof window !== "undefined") window.focus()
-      setIsPlaying(true)
+      startPlaybackFromUserGestureRef.current()
     })
     ms.setActionHandler("pause", () => {
       if (typeof window !== "undefined") window.focus()
