@@ -512,49 +512,57 @@ export function RadioPlayer() {
     return () => clearInterval(id)
   }, [mounted, isLoading, reloadAndPlayLive, resumePlaybackSoft])
 
+  /**
+   * When the app/tab returns to the foreground, WebKit often suspends `AudioContext` and/or pauses
+   * `<audio>` **without** a dependable `pause` event order — so we must not gate recovery on
+   * `interruptedRef` alone. Wake context + soft `play()` whenever UI state says we should be playing.
+   */
   useEffect(() => {
-    const tryResume = () => {
-      if (!interruptedRef.current) return
-      if (!isPlayingRef.current) {
-        interruptedRef.current = false
-        return
-      }
+    let debounceId: number | null = null
+
+    const wakeFromBackground = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+
+      void audioContextRef.current?.resume()
+
+      if (!isPlayingRef.current || userPausedRef.current) return
+
       const audio = audioRef.current
-      if (!audio || !audio.paused) return
-      window.setTimeout(() => {
-        const a = audioRef.current
-        if (!a || !isPlayingRef.current) return
-        interruptedRef.current = false
-        console.info("[RadioPlayer] Resuming after interruption — soft play first")
-        void resumePlaybackSoft(a).catch(() => {
-          softResumePendingRef.current = false
-          reloadAndPlayLive(a, rawUrlRef.current)
-        })
-      }, 250)
+      if (!audio || !audio.paused || !audio.currentSrc) return
+
+      void resumePlaybackSoft(audio).catch(() => {
+        softResumePendingRef.current = false
+        reloadAndPlayLive(audio, rawUrlRef.current)
+      })
+    }
+
+    const scheduleWake = () => {
+      if (debounceId != null) clearTimeout(debounceId)
+      debounceId = window.setTimeout(() => {
+        debounceId = null
+        wakeFromBackground()
+      }, 50)
     }
 
     const onVisibility = () => {
-      if (document.visibilityState === "visible") tryResume()
+      if (document.visibilityState === "visible") scheduleWake()
     }
 
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted || document.visibilityState === "visible") scheduleWake()
+    }
+
+    window.addEventListener("focus", scheduleWake)
     document.addEventListener("visibilitychange", onVisibility)
-    window.addEventListener("focus", tryResume)
+    window.addEventListener("pageshow", onPageShow)
+
     return () => {
+      if (debounceId != null) clearTimeout(debounceId)
+      window.removeEventListener("focus", scheduleWake)
       document.removeEventListener("visibilitychange", onVisibility)
-      window.removeEventListener("focus", tryResume)
+      window.removeEventListener("pageshow", onPageShow)
     }
   }, [reloadAndPlayLive, resumePlaybackSoft])
-
-  // Tab visible again — wake suspended AudioContext (browser often suspends on hidden tab).
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        void audioContextRef.current?.resume()
-      }
-    }
-    document.addEventListener("visibilitychange", onVisibility)
-    return () => document.removeEventListener("visibilitychange", onVisibility)
-  }, [])
 
   // Update analyzer data on animation frame
   const updateAnalyzerData = useCallback(() => {
