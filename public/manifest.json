@@ -2,7 +2,7 @@
   "name": "theradio.fm - Live Internet Radio",
   "short_name": "theradio.fm",
   "description": "A modern fullscreen internet radio player with live streaming, real-time track info, and dynamic album artwork",
-  "start_url": "https://play.theradio.fm",
+  "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
   "orientation": "portrait-primary",
@@ -11,16 +11,22 @@
   "categories": ["music", "entertainment"],
   "icons": [
     {
-      "src": "/icon-192x192.jpg",
+      "src": "/icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512x512.jpg",
+      "src": "/icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "screenshots": [
@@ -42,11 +48,12 @@
       "name": "Play/Pause theradio.fm",
       "short_name": "Play",
       "description": "Play or pause the radio stream",
-      "url": "https://play.theradio.fm",
+      "url": "/",
       "icons": [
         {
-          "src": "/icon-192x192.jpg",
-          "sizes": "192x192"
+          "src": "/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
         }
       ]
     }
