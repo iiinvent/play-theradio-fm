@@ -46,6 +46,9 @@ type LavaIntensity = "off" | "subtle" | "medium" | "high" | "reactive"
 
 const STREAM_URL = "https://servidor36-2.brlogic.com:7064/live"
 
+/** Same cadence as browser webradio `AudioGlobal` — catches silent OS pauses (esp. iOS). */
+const WATCHDOG_MS = 8_000
+
 /** Canonical absolute URL — compares safely to `HTMLMediaElement.src` (Firefox resolves aggressively). */
 function resolveStreamSrc(url: string): string {
   if (typeof window === "undefined") return url
@@ -68,18 +71,13 @@ function buildFreshStreamSrc(url: string): string {
   }
 }
 
-function stopAndUnloadStream(audio: HTMLAudioElement) {
-  audio.pause()
-  audio.removeAttribute("src")
-  audio.load()
-}
-
 /** Square brand asset: dark teal field, white ring, red disc — guides light/dark theme accents */
 const STATION_LOGO_URL = "/theradio-fm-logo.png"
 const DEFAULT_SHARE_IMAGE_URL = "/fallback.png"
 const SHARE_URL = "https://theradio.fm"
 
-const buildRealtimeShareUrl = () => `${SHARE_URL}?np=${Date.now()}`
+/** Canonical listen URL — live radio only; no `np=` timestamp so shares stay clean. */
+const buildShareUrl = () => SHARE_URL
 
 function isEmbeddedWindow(): boolean {
   if (typeof window === "undefined") return false
@@ -339,7 +337,14 @@ export function RadioPlayer() {
   const analyzerRef = useRef<AnalyserNode | null>(null)
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
-  
+  /** Base Icecast URL — updated when `/api/metadata` returns `streamUrl` (browser `rawUrlRef`). */
+  const rawUrlRef = useRef(STREAM_URL)
+  /** True only around deliberate `audio.pause()` from our `isPlaying` sync effect. */
+  const userPausedRef = useRef(false)
+  /** OS interruption (call, Siri, lock-screen edge cases) — triggers reload on focus like browser. */
+  const interruptedRef = useRef(false)
+  const isPlayingRef = useRef(false)
+
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   /** Firefox often fires `waiting` on live Icecast while the decoder catches up — distinct from initial tap load. */
@@ -391,6 +396,106 @@ export function RadioPlayer() {
     }
   }, [])
 
+  useEffect(() => {
+    rawUrlRef.current = metadata?.streamUrl || STREAM_URL
+  }, [metadata])
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying
+  }, [isPlaying])
+
+  /** Clear decoded buffer then reconnect with `_fresh` — matches browser webradio `reloadAndPlay`. */
+  const reloadAndPlayLive = useCallback(
+    (audio: HTMLAudioElement, rawBase: string) => {
+      if (!rawBase) return
+      interruptedRef.current = false
+      setIsLoading(true)
+      audio.src = ""
+      audio.load()
+      audio.src = buildFreshStreamSrc(rawBase)
+      audio.load()
+      audio.volume = 1
+      if (!audioContextRef.current) {
+        initializeAudioAnalyzer()
+      }
+      const ctx = audioContextRef.current
+      const playPromise = audio.play()
+      const resumePromise =
+        ctx?.state === "suspended" ? ctx.resume() : Promise.resolve()
+      void Promise.all([playPromise, resumePromise]).catch((e) => {
+        console.warn("[RadioPlayer] reloadAndPlayLive failed:", e)
+        setIsLoading(false)
+        setIsPlaying(false)
+      })
+    },
+    [initializeAudioAnalyzer],
+  )
+
+  // Drive `<audio>` from `isPlaying` — same model as browser `AudioGlobal` + Zustand `isPlaying` effect.
+  useEffect(() => {
+    if (!mounted) return
+    const audio = audioRef.current
+    if (!audio) return
+    const raw = rawUrlRef.current
+    if (!raw) return
+
+    if (isPlaying && audio.paused) {
+      reloadAndPlayLive(audio, raw)
+    } else if (!isPlaying && !audio.paused) {
+      userPausedRef.current = true
+      audio.pause()
+      userPausedRef.current = false
+    }
+  }, [isPlaying, mounted, reloadAndPlayLive])
+
+  useEffect(() => {
+    if (!mounted) return
+    const id = window.setInterval(() => {
+      const audio = audioRef.current
+      if (!audio) return
+      if (
+        isPlayingRef.current &&
+        !isLoading &&
+        audio.paused &&
+        !userPausedRef.current
+      ) {
+        console.info("[RadioPlayer] Watchdog: should be playing but paused — reloading")
+        reloadAndPlayLive(audio, rawUrlRef.current)
+      }
+    }, WATCHDOG_MS)
+    return () => clearInterval(id)
+  }, [mounted, isLoading, reloadAndPlayLive])
+
+  useEffect(() => {
+    const tryResume = () => {
+      if (!interruptedRef.current) return
+      if (!isPlayingRef.current) {
+        interruptedRef.current = false
+        return
+      }
+      const audio = audioRef.current
+      if (!audio || !audio.paused) return
+      window.setTimeout(() => {
+        const a = audioRef.current
+        if (!a || !isPlayingRef.current) return
+        console.info("[RadioPlayer] Resuming after interruption — reloading stream")
+        interruptedRef.current = false
+        reloadAndPlayLive(a, rawUrlRef.current)
+      }, 500)
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") tryResume()
+    }
+
+    document.addEventListener("visibilitychange", onVisibility)
+    window.addEventListener("focus", tryResume)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility)
+      window.removeEventListener("focus", tryResume)
+    }
+  }, [reloadAndPlayLive])
+
   // Update analyzer data on animation frame
   const updateAnalyzerData = useCallback(() => {
     if (!analyzerRef.current || !isPlaying) {
@@ -427,7 +532,7 @@ export function RadioPlayer() {
     setMounted(true)
   }, [])
 
-  // Live stream stall / resume — Firefox surfaces `waiting` often; keep AudioContext in sync after tab focus.
+  // `<audio>` events — browser `AudioGlobal` pattern: distinguish OS pause vs deliberate pause via `userPausedRef`.
   useEffect(() => {
     if (!mounted) return
     const audio = audioRef.current
@@ -435,24 +540,33 @@ export function RadioPlayer() {
 
     const onWaiting = () => setStreamBuffering(true)
     const onCanPlay = () => setStreamBuffering(false)
-    const onPlaying = () => {
+    const onPlayingAudio = () => {
       setStreamBuffering(false)
+      setIsLoading(false)
+      interruptedRef.current = false
+      setIsPlaying(true)
       if (audioContextRef.current?.state === "suspended") {
         void audioContextRef.current.resume().catch(() => {})
       }
     }
-    const onPause = () => setStreamBuffering(false)
+    const onPauseAudio = () => {
+      setStreamBuffering(false)
+      if (!userPausedRef.current && isPlayingRef.current) {
+        interruptedRef.current = true
+      }
+      userPausedRef.current = false
+    }
 
     audio.addEventListener("waiting", onWaiting)
     audio.addEventListener("canplay", onCanPlay)
-    audio.addEventListener("playing", onPlaying)
-    audio.addEventListener("pause", onPause)
+    audio.addEventListener("playing", onPlayingAudio)
+    audio.addEventListener("pause", onPauseAudio)
 
     return () => {
       audio.removeEventListener("waiting", onWaiting)
       audio.removeEventListener("canplay", onCanPlay)
-      audio.removeEventListener("playing", onPlaying)
-      audio.removeEventListener("pause", onPause)
+      audio.removeEventListener("playing", onPlayingAudio)
+      audio.removeEventListener("pause", onPauseAudio)
     }
   }, [mounted])
 
@@ -510,10 +624,7 @@ export function RadioPlayer() {
     const interval = setInterval(() => {
       setSleepTimerSeconds((prev) => {
         if (prev === null || prev <= 1) {
-          if (audioRef.current) {
-            audioRef.current.pause()
-            setIsPlaying(false)
-          }
+          setIsPlaying(false)
           setSleepTimerActive(false)
           setSleepTimerPresetMinutes(null)
           return null
@@ -538,14 +649,66 @@ export function RadioPlayer() {
     setSleepTimerActive(false)
   }
 
-  // Media Session API — updates OS/browser media controls
+  const parseTrackInfo = (track: string | undefined) => {
+    if (!track) return { artist: "Unknown Artist", title: "Unknown Track" }
+    const parts = track.split(" - ")
+    if (parts.length >= 2) {
+      return { artist: parts[0].trim(), title: parts.slice(1).join(" - ").trim() }
+    }
+    return { artist: "Unknown Artist", title: track }
+  }
+
+  /** Flip intent — actual `<audio>` work runs in the `isPlaying` sync effect (browser webradio pattern). */
+  const togglePlay = useCallback(() => {
+    setIsPlaying((v) => !v)
+  }, [])
+
+  // Media Session: OS controls call `setIsPlaying(true|false)` like Zustand `play`/`pause` in browser webradio.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
+    const ms = navigator.mediaSession
+
+    ms.setActionHandler("play", () => {
+      if (typeof window !== "undefined") window.focus()
+      setIsPlaying(true)
+    })
+    ms.setActionHandler("pause", () => {
+      if (typeof window !== "undefined") window.focus()
+      setIsPlaying(false)
+    })
+    ms.setActionHandler("stop", () => {
+      if (typeof window !== "undefined") window.focus()
+      setIsPlaying(false)
+    })
+
+    ;(["seekbackward", "seekforward", "previoustrack", "nexttrack"] as const).forEach((action) => {
+      try {
+        ms.setActionHandler(action, null)
+      } catch {
+        /* unsupported */
+      }
+    })
+
+    return () => {
+      ;(["play", "pause", "stop", "seekbackward", "seekforward", "previoustrack", "nexttrack"] as const).forEach(
+        (action) => {
+          try {
+            ms.setActionHandler(action, null)
+          } catch {
+            /* */
+          }
+        },
+      )
+    }
+  }, [])
+
+  // Media Session: artwork + playback state + live position hint
   useEffect(() => {
     if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
 
     const track = parseTrackInfo(metadata?.currentTrack)
     const artSrc = proxyImageUrl(metadata?.albumArt)
 
-    // Build an absolute URL for artwork (Media Session requires absolute URLs in some browsers)
     const origin = typeof window !== "undefined" ? window.location.origin : ""
     const absoluteArtSrc = artSrc?.startsWith("/") ? `${origin}${artSrc}` : artSrc
     const defaultShareImageSrc = `${origin}${DEFAULT_SHARE_IMAGE_URL}`
@@ -568,31 +731,20 @@ export function RadioPlayer() {
 
     navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused"
 
-    navigator.mediaSession.setActionHandler("play", () => {
-      // Focus window when media control is clicked
-      if (typeof window !== "undefined") window.focus()
-      togglePlay()
-    })
-    navigator.mediaSession.setActionHandler("pause", () => {
-      // Focus window when media control is clicked
-      if (typeof window !== "undefined") window.focus()
-      togglePlay()
-    })
-    navigator.mediaSession.setActionHandler("stop", () => {
-      // Focus window when media control is clicked
-      if (typeof window !== "undefined") window.focus()
-      if (audioRef.current) {
-        stopAndUnloadStream(audioRef.current)
-        setIsPlaying(false)
+    try {
+      if (isPlaying && typeof navigator.mediaSession.setPositionState === "function") {
+        navigator.mediaSession.setPositionState({
+          duration: Number.POSITIVE_INFINITY,
+          playbackRate: 1,
+          position: 0,
+        })
+      } else if (typeof navigator.mediaSession.setPositionState === "function") {
+        navigator.mediaSession.setPositionState(null as unknown as MediaPositionState)
       }
-    })
-
-    // Clear seek/track handlers — live stream has no seeking or tracks
-    navigator.mediaSession.setActionHandler("seekbackward", null)
-    navigator.mediaSession.setActionHandler("seekforward", null)
-    navigator.mediaSession.setActionHandler("previoustrack", null)
-    navigator.mediaSession.setActionHandler("nexttrack", null)
-  }, [metadata, isPlaying]) // eslint-disable-line react-hooks/exhaustive-deps
+    } catch {
+      /* Infinity unsupported */
+    }
+  }, [metadata, isPlaying])
 
   // Fetch stream metadata
   const fetchMetadata = useCallback(async () => {
@@ -616,56 +768,6 @@ export function RadioPlayer() {
     return () => clearInterval(metadataInterval)
   }, [fetchMetadata])
 
-  // Audio controls
-  const togglePlay = async () => {
-    if (!audioRef.current) return
-
-    if (isPlaying) {
-      stopAndUnloadStream(audioRef.current)
-      setIsPlaying(false)
-    } else {
-      setIsLoading(true)
-      try {
-        const audio = audioRef.current
-        const streamUrl = buildFreshStreamSrc(metadata?.streamUrl || STREAM_URL)
-        audio.pause()
-        audio.src = streamUrl
-        audio.load()
-        audio.volume = 1
-
-        // Web Audio graph for the visualizer — must exist before play when using routing through AudioContext
-        if (!audioContextRef.current) {
-          initializeAudioAnalyzer()
-        }
-
-        // Start play() and AudioContext.resume() in the same synchronous turn as the click.
-        // Firefox (notably in cross-origin iframes) rejects play() if any await ran earlier in the
-        // handler; transient user activation does not survive that yield. Awaiting only after both
-        // promises are created preserves audible output when routing through Web Audio.
-        const ctx = audioContextRef.current
-        const playPromise = audio.play()
-        const resumePromise =
-          ctx?.state === "suspended" ? ctx.resume() : Promise.resolve()
-
-        await Promise.all([playPromise, resumePromise])
-        setIsPlaying(true)
-      } catch (error) {
-        console.error("Playback error:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-  }
-
-  const parseTrackInfo = (track: string | undefined) => {
-    if (!track) return { artist: "Unknown Artist", title: "Unknown Track" }
-    const parts = track.split(" - ")
-    if (parts.length >= 2) {
-      return { artist: parts[0].trim(), title: parts.slice(1).join(" - ").trim() }
-    }
-    return { artist: "Unknown Artist", title: track }
-  }
-
   const trackInfo = parseTrackInfo(metadata?.currentTrack)
   const albumArtUrl = proxyImageUrl(metadata?.albumArt)
 
@@ -673,7 +775,7 @@ export function RadioPlayer() {
   const handleShare = async () => {
     const shareTitle = `${trackInfo.title} - ${trackInfo.artist}`
     const shareText = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm`
-    const shareUrl = buildRealtimeShareUrl()
+    const shareUrl = buildShareUrl()
     const shareMessage = `${shareText}\n${shareUrl}`
     const shareData = {
       title: shareTitle,
@@ -1333,7 +1435,7 @@ export function RadioPlayer() {
                     <input
                       type="text"
                       readOnly
-                      value={buildRealtimeShareUrl()}
+                      value={buildShareUrl()}
                       onFocus={(e) => e.currentTarget.select()}
                       onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
                       className="min-h-[42px] flex-1 rounded-lg border border-input bg-muted px-3 py-2.5 text-sm leading-snug text-foreground shadow-inner"
@@ -1343,7 +1445,7 @@ export function RadioPlayer() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        const url = buildRealtimeShareUrl()
+                        const url = buildShareUrl()
                         void copyTextToClipboard(url)
                       }}
                       className="shrink-0 rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -1352,7 +1454,7 @@ export function RadioPlayer() {
                     </motion.button>
                   </div>
                   <a
-                    href={buildRealtimeShareUrl()}
+                    href={buildShareUrl()}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex text-sm font-medium text-primary hover:underline"
@@ -1368,7 +1470,7 @@ export function RadioPlayer() {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                     <textarea
                       readOnly
-                      value={`Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildRealtimeShareUrl()}`}
+                      value={`Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildShareUrl()}`}
                       onFocus={(e) => e.currentTarget.select()}
                       onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}
                       className="min-h-[5.5rem] flex-1 resize-none rounded-lg border border-input bg-muted px-3 py-2.5 text-sm leading-relaxed text-foreground shadow-inner"
@@ -1379,7 +1481,7 @@ export function RadioPlayer() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        const message = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildRealtimeShareUrl()}`
+                        const message = `Listening to "${trackInfo.title}" by ${trackInfo.artist} on theradio.fm\n${buildShareUrl()}`
                         void copyTextToClipboard(message)
                       }}
                       className="shrink-0 self-start rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-black/20 transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:self-stretch"
@@ -1406,7 +1508,7 @@ export function RadioPlayer() {
       {/* Audio Element */}
       <audio
         ref={audioRef}
-        preload="metadata"
+        preload="none"
         crossOrigin="anonymous"
         playsInline
       />
