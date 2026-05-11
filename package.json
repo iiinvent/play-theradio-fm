@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "pages:build": "pnpm dlx @cloudflare/next-on-pages",
+    "pages:preview": "pnpm run pages:build && pnpm dlx wrangler pages dev .vercel/output/static",
+    "pages:deploy": "pnpm run pages:build && pnpm dlx wrangler pages deploy .vercel/output/static --project-name play-theradio-fm"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
