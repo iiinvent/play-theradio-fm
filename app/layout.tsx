@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import Script from 'next/script'
-import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { TheradioPlayStorageBridge } from '@/components/theradio-storage-bridge'
 import { THERADIO_KV_BOOTSTRAP_SCRIPT } from '@/lib/theradio-kv-bootstrap-script'
@@ -150,7 +149,6 @@ export default function RootLayout({
         >
           {children}
         </ThemeProvider>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )
