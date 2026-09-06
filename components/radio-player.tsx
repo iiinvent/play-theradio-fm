@@ -1007,8 +1007,11 @@ export function RadioPlayer() {
           </motion.div>
           <div className="min-w-0">
             <h1 className="truncate text-base font-bold leading-tight text-white md:text-lg">
-              {metadata?.name || "theradio.fm"}
+              Listen to live radio
             </h1>
+            <p className="truncate text-[11px] font-medium text-white/80 md:text-xs">
+              {metadata?.name || "theradio.fm"}
+            </p>
             <div className="flex items-center gap-1.5" role="status" aria-live="polite">
               <motion.span
                 animate={{

@@ -54,16 +54,22 @@ async function getNowPlaying(): Promise<{ currentTrack: string; albumArt: string
 
 export async function generateMetadata(): Promise<Metadata> {
   const { currentTrack, albumArt } = await getNowPlaying()
-  const title = currentTrack ? `${currentTrack} on theradio.fm` : 'theradio.fm - Live Internet Radio'
+  const title = currentTrack
+    ? `${currentTrack} — Listen to Live Radio Free | theradio.fm`
+    : 'Listen to Live Internet Radio Free | theradio.fm'
   const description = currentTrack
-    ? `Now playing: ${currentTrack} on theradio.fm`
-    : 'Listen live to theradio.fm with real-time track info and album artwork'
+    ? `Now playing ${currentTrack}. Listen live to free internet radio on theradio.fm — no login required.`
+    : 'Listen live to free internet radio on theradio.fm with real-time track info and album artwork. No login required.'
   const imageUrl = albumArt || DEFAULT_SHARE_IMAGE_URL
   const imageAlt = currentTrack ? `${currentTrack} album art` : 'theradio.fm icon'
 
   return {
     title,
     description,
+    metadataBase: new URL(APP_URL),
+    alternates: { canonical: APP_URL },
+    robots: { index: true, follow: true },
+    keywords: ['live radio', 'internet radio', 'free radio', 'theradio.fm', 'online radio'],
     generator: 'v0.app',
     manifest: '/manifest.json',
     appleWebApp: {
@@ -74,7 +80,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      url: SHARE_URL,
+      url: APP_URL,
       siteName: 'theradio.fm',
       type: 'music.radio_station',
       images: [
@@ -135,6 +141,24 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="bg-background">
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'RadioStation',
+              name: 'theradio.fm',
+              url: APP_URL,
+              description:
+                'Listen live to free internet radio on theradio.fm with real-time track info and album artwork.',
+              parentOrganization: {
+                '@type': 'Organization',
+                name: 'theradio.fm',
+                url: SHARE_URL,
+              },
+            }),
+          }}
+        />
         <Script id="theradio-kv-bootstrap" strategy="beforeInteractive">
           {THERADIO_KV_BOOTSTRAP_SCRIPT}
         </Script>
