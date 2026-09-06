@@ -17,3 +17,5 @@ node_modules
 .wrangler/
 .vercel/
 .pnpm-store/
+.vercel
+.env*

@@ -1,42 +1,69 @@
 import { NextRequest, NextResponse } from "next/server"
-import { upscaleItunesArtworkUrl } from "@/lib/stream-artwork"
+import {
+  parseArtistTitleFromTrack,
+  resolveAlbumArtForTrack,
+  upscaleItunesArtworkUrl,
+} from "@/lib/stream-artwork"
+
+export const dynamic = "force-dynamic"
+export const runtime = "edge"
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
-  const artist = searchParams.get("artist") || ""
-  const track = searchParams.get("track") || ""
+  let artist = searchParams.get("artist") || ""
+  let track = searchParams.get("track") || ""
+  const q = searchParams.get("q") || ""
+
+  if (q && !artist && !track) {
+    const parsed = parseArtistTitleFromTrack(q)
+    artist = parsed.artist
+    track = parsed.title
+  }
 
   if (!artist && !track) {
     return NextResponse.json({ artworkUrl: null })
   }
 
   try {
-    // Search iTunes API for album artwork
-    const searchQuery = encodeURIComponent(`${artist} ${track}`.trim())
-    const response = await fetch(
-      `https://itunes.apple.com/search?term=${searchQuery}&media=music&limit=1`
-    )
+    const combined =
+      artist && track && artist !== "Unknown Artist"
+        ? `${artist} - ${track}`
+        : `${artist} ${track}`.trim()
 
-    if (!response.ok) {
-      return NextResponse.json({ artworkUrl: null })
-    }
+    const artworkUrl =
+      (await resolveAlbumArtForTrack(combined, { timeoutMs: 5000 })) ||
+      (await resolveFromItunesDirect(artist, track))
 
-    const data = await response.json()
-
-    if (data.results && data.results.length > 0) {
-      const raw = data.results[0].artworkUrl100
-      const artworkUrl = raw ? upscaleItunesArtworkUrl(raw) : null
-      return NextResponse.json({
-        artworkUrl,
-        artistName: data.results[0].artistName,
-        trackName: data.results[0].trackName,
-        collectionName: data.results[0].collectionName,
-      })
-    }
-
-    return NextResponse.json({ artworkUrl: null })
+    return NextResponse.json({
+      artworkUrl,
+      artistName: artist || null,
+      trackName: track || null,
+    })
   } catch (error) {
     console.error("Error fetching album art:", error)
     return NextResponse.json({ artworkUrl: null })
   }
+}
+
+async function resolveFromItunesDirect(
+  artist: string,
+  track: string
+): Promise<string | null> {
+  const term = `${artist} ${track}`.trim()
+  if (!term) return null
+  const response = await fetch(
+    `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=1`,
+    {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    }
+  )
+  if (!response.ok) return null
+  const data = (await response.json()) as { results?: { artworkUrl100?: string }[] }
+  const raw = data.results?.[0]?.artworkUrl100
+  return raw ? upscaleItunesArtworkUrl(raw) : null
 }

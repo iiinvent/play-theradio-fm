@@ -140,14 +140,15 @@ const LAVA_INTENSITY_OPTIONS: { type: LavaIntensity; label: string; description:
   { type: "reactive", label: "Reactive", description: "Audio-reactive" },
 ]
 
-// Proxy album art images
+// Proxy hotlinked BRLogic CDNs; pass through iTunes / other HTTPS art directly.
 const proxyImageUrl = (url: string | null | undefined): string | null => {
   if (!url) return null
-  if (url.includes("public-rf-song-cover.minhawebradio.net")) {
+  if (
+    url.includes("public-rf-song-cover.minhawebradio.net") ||
+    url.includes("public-rf-upload.minhawebradio.net") ||
+    url.includes("platform-upload.cdn-brlogic.com")
+  ) {
     return `/api/image?url=${encodeURIComponent(url)}`
-  }
-  if (url.includes("public-rf-upload.minhawebradio.net")) {
-    return null
   }
   return url
 }
@@ -357,6 +358,9 @@ export function RadioPlayer() {
   const [metadata, setMetadata] = useState<StreamMetadata | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [lastTrack, setLastTrack] = useState<string>("")
+  /** Client-side iTunes fallback when `/api/metadata` returns null art for a known track. */
+  const [clientAlbumArt, setClientAlbumArt] = useState<string | null>(null)
+  const [albumArtBroken, setAlbumArtBroken] = useState(false)
   
   // Visualizer states
   const [lavaIntensity, setLavaIntensity] = useState<LavaIntensity>("medium")
@@ -753,7 +757,9 @@ export function RadioPlayer() {
     if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
 
     const track = parseTrackInfo(metadata?.currentTrack)
-    const artSrc = proxyImageUrl(metadata?.albumArt)
+    const artSrc = albumArtBroken
+      ? null
+      : proxyImageUrl(metadata?.albumArt || clientAlbumArt)
 
     const origin = typeof window !== "undefined" ? window.location.origin : ""
     const absoluteArtSrc = artSrc?.startsWith("/") ? `${origin}${artSrc}` : artSrc
@@ -792,7 +798,7 @@ export function RadioPlayer() {
     } catch {
       /* Infinity unsupported */
     }
-  }, [metadata, isPlaying])
+  }, [metadata, isPlaying, clientAlbumArt, albumArtBroken])
 
   // Distinct tab/window title so task switcher ≠ other theradio PWAs / embedded iframes.
   useEffect(() => {
@@ -815,9 +821,64 @@ export function RadioPlayer() {
       const data: StreamMetadata = await response.json()
       setMetadata(data)
       setIsConnected(data.isLive !== false)
-      
+
       if (data.currentTrack && data.currentTrack !== lastTrack) {
         setLastTrack(data.currentTrack)
+        setClientAlbumArt(null)
+        setAlbumArtBroken(false)
+      }
+
+      // If server art is missing but we know the track, resolve via dedicated album-art route
+      // (and browser-direct iTunes as last resort) so covers still show when available.
+      if (!data.albumArt && data.currentTrack) {
+        const parts = data.currentTrack.split(" - ")
+        const artist = parts.length >= 2 ? parts[0].trim() : ""
+        const track =
+          parts.length >= 2 ? parts.slice(1).join(" - ").trim() : data.currentTrack.trim()
+        try {
+          const artRes = await fetch(
+            `/api/album-art?artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(track)}`,
+            { cache: "no-store" }
+          )
+          if (artRes.ok) {
+            const artData = (await artRes.json()) as { artworkUrl?: string | null }
+            if (artData.artworkUrl) {
+              setClientAlbumArt(artData.artworkUrl)
+              return
+            }
+          }
+        } catch {
+          /* try iTunes directly */
+        }
+
+        try {
+          const simplified = track.replace(/\s*[\(\[\{][^)\]\}]*[\)\]\}]\s*/g, " ").replace(/\s{2,}/g, " ").trim()
+          const queries = [
+            `${artist} ${track}`.trim(),
+            `${artist} ${simplified}`.trim(),
+            simplified,
+          ].filter((q, i, arr) => q.length > 0 && arr.indexOf(q) === i)
+
+          for (const term of queries) {
+            const itunesRes = await fetch(
+              `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&limit=5`
+            )
+            if (!itunesRes.ok) continue
+            const itunesData = (await itunesRes.json()) as {
+              results?: { artworkUrl100?: string }[]
+            }
+            const raw = itunesData.results?.[0]?.artworkUrl100
+            if (raw) {
+              setClientAlbumArt(raw.replace(/\d+x\d+bb/g, "3000x3000bb"))
+              return
+            }
+          }
+        } catch {
+          /* leave logo fallback */
+        }
+      } else if (data.albumArt) {
+        setClientAlbumArt(null)
+        setAlbumArtBroken(false)
       }
     } catch {
       setIsConnected(false)
@@ -831,7 +892,9 @@ export function RadioPlayer() {
   }, [fetchMetadata])
 
   const trackInfo = parseTrackInfo(metadata?.currentTrack)
-  const albumArtUrl = proxyImageUrl(metadata?.albumArt)
+  const albumArtUrl = albumArtBroken
+    ? null
+    : proxyImageUrl(metadata?.albumArt || clientAlbumArt)
 
   // Share functionality with current track metadata — iframe-compatible
   const handleShare = async () => {
@@ -1260,6 +1323,7 @@ export function RadioPlayer() {
                     src={albumArtUrl}
                     alt="Album artwork"
                     className="block h-full w-full object-cover"
+                    onError={() => setAlbumArtBroken(true)}
                   />
                 ) : (
                   <motion.div

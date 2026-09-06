@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 
+export const dynamic = "force-dynamic"
+export const runtime = "edge"
+
 const ALLOWED_DOMAINS = [
   "public-rf-song-cover.minhawebradio.net",
   "public-rf-upload.minhawebradio.net",
+  "platform-upload.cdn-brlogic.com",
 ]
 
 export async function GET(request: NextRequest) {
@@ -14,18 +18,18 @@ export async function GET(request: NextRequest) {
 
   try {
     const parsedUrl = new URL(url)
-    
-    // Validate domain
+
     if (!ALLOWED_DOMAINS.includes(parsedUrl.hostname)) {
       return new NextResponse("Domain not allowed", { status: 403 })
     }
 
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": "https://public-player-widget.webradiosite.com/",
-        "Origin": "https://public-player-widget.webradiosite.com",
-        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Referer: "https://public-player-widget.webradiosite.com/",
+        Origin: "https://public-player-widget.webradiosite.com",
+        Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
       },
     })
 

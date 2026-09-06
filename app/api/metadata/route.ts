@@ -9,6 +9,7 @@ const STATUS_URL = "https://d36nr0u3xmc4mm.cloudfront.net/index.php/api/streamin
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
+export const runtime = "edge"
 
 interface PlayerInfo {
   radioName?: string
@@ -112,32 +113,40 @@ export async function GET() {
 
     const currentTrack = streamStatus?.currentTrack || ""
 
-    /** BRLogic song-cover when present; else iTunes artwork at hi-res (mzstatic 3000×3000 cap). */
-    const albumArtResolved = await resolveAlbumArtForTrack(currentTrack)
-    
     // Get current program from schedule
     const currentProgram = getCurrentProgram(playerInfo?.nextSchedules)
 
-    // Also fetch ICY headers for additional info
-    let icyData: Record<string, string> = {}
-    try {
-      const streamResponse = await fetch(STREAM_URL, {
-        headers: {
-          "Icy-MetaData": "1",
-          "User-Agent": "Mozilla/5.0",
-        },
-        signal: AbortSignal.timeout(3000),
-        cache: "no-store",
-      })
-      
-      streamResponse.headers.forEach((value, key) => {
-        if (key.toLowerCase().startsWith("icy-") || key.toLowerCase() === "content-type" || key.toLowerCase() === "server") {
-          icyData[key.toLowerCase()] = value
+    // Resolve art in parallel with ICY headers so a slow cover lookup cannot starve the response.
+    const [albumArtResolved, icyData] = await Promise.all([
+      resolveAlbumArtForTrack(currentTrack, { timeoutMs: 4000 }),
+      (async (): Promise<Record<string, string>> => {
+        const headers: Record<string, string> = {}
+        try {
+          const streamResponse = await fetch(STREAM_URL, {
+            headers: {
+              "Icy-MetaData": "1",
+              "User-Agent": "Mozilla/5.0",
+            },
+            signal: AbortSignal.timeout(2500),
+            cache: "no-store",
+          })
+
+          streamResponse.headers.forEach((value, key) => {
+            const lower = key.toLowerCase()
+            if (
+              lower.startsWith("icy-") ||
+              lower === "content-type" ||
+              lower === "server"
+            ) {
+              headers[lower] = value
+            }
+          })
+        } catch {
+          // ICY headers are supplementary
         }
-      })
-    } catch {
-      // ICY headers are supplementary
-    }
+        return headers
+      })(),
+    ])
 
     return NextResponse.json({
       // Station info
